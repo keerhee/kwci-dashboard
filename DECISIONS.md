@@ -1,4 +1,4 @@
-# KWCI 결정 로그 (DECISIONS) — 사고 과정 인계
+# KCIS 결정 로그 (DECISIONS) — 사고 과정 인계
 
 > "왜 이렇게 만들었는가"의 기록. 외부 검토자(Codex 등)가 설계 의도를 이해하고 이어받기 위한 문서.
 
@@ -44,7 +44,14 @@
 ## Known limitations (검토 시 고려)
 - 콘텐츠 4분야(kpop·kvideo·kgame·kwebtoon)의 **국가별 L1 부재**: KOSIS가 전국 단위라 횡단 DSI엔 미반영(2018=100 시계열만).
 - **플랫폼 편향**: 중국·러시아는 YouTube/Trends 차단·저점유 → 해당국 과소평가 가능.
-- **위험도(R) 미반영**: 반한류·피로도·정치갈등 등 위험 차원 부재.
+- **위험도(R)**: (Phase 0에서 쏠림 기반 R 도입 — 아래 참조. 조작·부정감성은 미연동)
 - 일부 지표 **verified-fixed**(API 장애 시). 절대값보다 구조·순위·추세로 해석.
 - **단일 Min-Max 정규화**는 극단값 민감 → 백분위·Z-score 민감도 분석 권장.
 - audience 다변화 2019 보간·2025 공표 보강 등 결측 처리 가정 존재.
+
+## 외부 연구자 조언 반영 (Phase 0 — 2026-07-03)
+외부 연구자가 상위 시스템 **KCIS**(KCVI 주간 확산지수 + KWCI 분기지수, 3층 가중엔진·리스크·백테스트·공유 DB)를 통째로 제안. 소표본에서 **즉시 유효한 2가지만 1단계로 채택·배포**(kwci_latest.json):
+- **위험도 R(쏠림)**: R_conc = clamp(100 − ENM·(100/(warn·2.5))), warn=8. audience ENM 기반. 글로벌 R≈27, K팝 R≈27. 값↑=특정국 의존↑=위험↑. 조작(주간 조회수 급등·봇)·부정감성(댓글 감성)은 주간 패널·감성분석 확보 후 연동(정직 표기: components_pending).
+- **Entropy-AHP 하이브리드 가중**: w=θ·AHP+(1−θ)·Entropy(θ=0.5). AHP=산업규모안(전문가 사전), Entropy=DSI 횡단 구분력(1−엔트로피). `weight_profiles.entropy_ahp` + `data_driven_weights`(weights·w_entropy)로 노출.
+- **보류(2단계, 약 60주 패널 축적 후)**: IPCA(Kelly-Pruitt-Su 2019 동적 로딩 β=ZΓ)·MoE 국면 게이팅(KWCI-DW)·KCVI 주간지수·lead-lag(CCF·IC) 백테스트. 소표본에선 통계적으로 무의미(연구자도 경고) → 데이터 축적이 선행 조건.
+- 출처: 연구자 제공 KCIS(weighting/entropy_ahp.py, shared/risk.py) 이식.
