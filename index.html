@@ -243,8 +243,8 @@
     <section class="section trends" id="diversification">
       <div class="section-head">
         <div>
-          <p class="eyebrow">Diversification</p>
-          <h2>시장 다변화 지수</h2>
+          <p class="eyebrow">Diversification &amp; Risk</p>
+          <h2>시장 다변화 · 위험도</h2>
         </div>
       </div>
       <div class="trends-grid">
@@ -257,7 +257,11 @@
           <div id="audDivPanel">불러오는 중…</div>
         </div>
       </div>
-      <p class="muted-line">다변화 지수↑ = 특정국 쏠림↓(복원력↑). 관광=방한 외래객 국적 구성의 유효시장수, 수용=분야별 KOFICE 국가별 관심 구성의 유효시장수(ENM=1/HHI). 수용은 단면 노이즈가 없는 KOFICE 설문이 1차 기준이며, YouTube는 참고 보조(YT). 출처: history.json · kwci_latest.json.</p>
+      <div class="trend-card" style="margin-top:16px">
+        <h3>위험도 R · 데이터기반 가중 <small>외부 연구자(KCIS) 조언 1단계 반영</small></h3>
+        <div id="riskWeightPanel">불러오는 중…</div>
+      </div>
+      <p class="muted-line">다변화 지수↑ = 특정국 쏠림↓(복원력↑). 위험도 R↑ = 특정국 의존↑(취약↑, ENM 기반 쏠림). 데이터기반 가중=Entropy-AHP(전문가 AHP × 데이터 구분력)로 전문가 고정가중과 비교. 관광=방한 외래객 국적 구성, 수용=분야별 KOFICE 국가별 관심 구성의 유효시장수(ENM=1/HHI). 출처: history.json · kwci_latest.json.</p>
     </section>
   </main>
 
@@ -334,6 +338,20 @@
         + '<div style="font-size:11px;color:#94a3b8;margin-top:6px">ENM·최다 관심국 = KOFICE 설문(안정) 기준. YT참고 = YouTube 단면 ENM(노이즈, 비교용).</div>'
         : '수용 다변화 데이터 없음(다음 자동수집 후 표시).';
       if (list.length) barChart(document.getElementById('audDivChart'), list.map(function(g){ return {name:(names[g]||g), v:ad[g].enm}; }));
+
+      // 위험도 R · 데이터기반 가중 (외부 연구자 KCIS 조언 1단계)
+      try {
+        const rw = document.getElementById('riskWeightPanel');
+        const risk = k.risk || {}; const per = risk.per_domain || {};
+        const ddw = (k.data_driven_weights && k.data_driven_weights.weights) || {};
+        const ind = (k.weight_profiles && k.weight_profiles.industry && k.weight_profiles.industry.weights) || {};
+        const rrows = order.filter(function(g){ return per[g] && per[g].R_concentration != null; }).map(function(g){
+          return '<tr><td>' + (names[g] || g) + '</td><td style="text-align:right;color:#dc2626">' + per[g].R_concentration + '</td><td style="text-align:right">' + (ddw[g] != null ? ddw[g] : '-') + '</td><td style="text-align:right;color:#94a3b8">' + (ind[g] != null ? ind[g] : '-') + '</td></tr>';
+        }).join('');
+        rw.innerHTML = (risk.global_R_concentration != null ? '<div style="font-size:13px;color:#334155;margin-bottom:8px">글로벌 위험도 R(쏠림): <b style="color:#dc2626;font-size:16px">' + risk.global_R_concentration + '</b> <span style="color:#94a3b8">(0~100, 값↑=특정국 의존↑=취약↑)</span></div>' : '')
+          + (rrows ? '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:#64748b"><th style="text-align:left">분야</th><th style="text-align:right">위험도 R</th><th style="text-align:right">가중 Entropy-AHP</th><th style="text-align:right">가중 산업규모안</th></tr>' + rrows + '</table>' : '위험도 데이터 없음')
+          + '<div style="font-size:11px;color:#94a3b8;margin-top:6px">R = 쏠림 위험(ENM 기반 concentration). 조작·부정감성 R은 주간 패널·감성분석 연동 후. 가중 = 데이터기반 Entropy-AHP(θ·AHP+(1-θ)·Entropy) vs 전문가 고정(산업규모안) 비교. 외부 연구자(KCIS) 제안 1단계.</div>';
+      } catch (e) { var rw2 = document.getElementById('riskWeightPanel'); if (rw2) rw2.textContent = '로드 실패'; }
     } catch (e) { var a = document.getElementById('audDivPanel'); if (a) a.textContent = '로드 실패'; }
   })();
   </script>
