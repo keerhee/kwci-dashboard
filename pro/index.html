@@ -19,11 +19,17 @@
     .trend-legend .lg{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3a4654}
     .trend-legend .lg i{width:12px;height:12px;border-radius:3px;display:inline-block}
     .latest-row.mom{grid-template-columns:1fr 2fr auto}
+    .readguide{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+    .readguide .rg{background:#fff;border:1px solid #e6ebf1;border-radius:12px;padding:14px}
+    .readguide .rg h4{margin:0 0 6px;font-size:14px;color:#1f3864}
+    .readguide .rg p{margin:0;font-size:12.5px;color:#475569;line-height:1.55}
+    .heatwrap{overflow:auto}
+    #heatChart{display:block}
   </style>
 </head>
 <body>
   <div class="prebar">
-    <span><b>정교화 미리보기 (pro)</b> — 실험용 · 라이브 데이터 공유</span>
+    <span><b>정교화 미리보기 (pro)</b> — 실험용 · 라이브 데이터 공유 · KCVI(선행지수) 미도입</span>
     <a href="../">← 안정 버전(라이브)로</a>
   </div>
   <header class="topbar">
@@ -35,12 +41,13 @@
       </span>
     </a>
     <nav aria-label="주요 섹션">
+      <a href="#howto">읽는 법</a>
       <a href="#domains">도메인</a>
       <a href="#method">산식</a>
-      <a href="#pipeline">수집</a>
       <a href="#dashboard">대시보드</a>
       <a href="#trends">추이</a>
-      <a href="#diversification">다변화</a>
+      <a href="#diversification">다변화·위험도</a>
+      <a href="#heatmap">히트맵</a>
     </nav>
   </header>
 
@@ -55,7 +62,7 @@
         </p>
         <div class="hero-actions">
           <a class="button primary" href="#dashboard">지수 보기</a>
-          <a class="button secondary" href="#pipeline">수집 계획</a>
+          <a class="button secondary" href="#howto">읽는 법</a>
         </div>
       </div>
       <div class="hero-panel" aria-label="지수 핵심 구조">
@@ -71,6 +78,11 @@
           <div><b>L3</b><span>정성 아카이브</span></div>
         </div>
       </div>
+    </section>
+
+    <section class="section" id="howto">
+      <div class="section-head"><div><p class="eyebrow">How to read</p><h2>읽는 법</h2></div></div>
+      <div class="readguide" id="readGuide"></div>
     </section>
 
     <section class="section intro">
@@ -216,7 +228,7 @@
           <span>현재 KWCI (2018=100)</span>
           <strong id="kwciValue">—</strong>
           <small>막대 = 분야별 현재 지수(2018=100). 100 = 2018년 수준. 추세는 아래 '추이' 차트.</small>
-          <small class="src-note">출처(2018=100, 2018–2025): 콘텐츠 4분야(K-pop·K영상·게임·웹툰)=KOSIS, 푸드·패션·뷰티=관세청 무역통계(가공식품·의류·화장품 HS) 라이브 실측, 관광=KOSIS 국적별 외래객(orgId=111). ※ K웹툰은 ‘만화 수출’(웹툰 포함, 종이 만화 아님), K푸드는 가공식품(라면·김치 등) 수출 기준이라 총농식품보다 증가율이 높을 수 있습니다. 2018 저(低)베이스 유의. 별도 항목으로 <b>관광 다각화 지수</b>(source-market 다변화·중국 의존도, 2018=100)를 history.json에 제공.</small>
+          <small class="src-note">출처(2018=100, 2018–2025): 콘텐츠 4분야(K-pop·K영상·게임·웹툰)=KOSIS, 푸드·패션·뷰티=관세청 무역통계(가공식품·의류·화장품 HS) 라이브 실측, 관광=KOSIS 국적별 외래객(orgId=111). ※ K웹툰은 ‘만화 수출’(웹툰 포함), K푸드는 가공식품 수출 기준. 2018 저(低)베이스 유의. 별도 항목으로 <b>관광 다각화 지수</b>를 history.json에 제공.</small>
         </div>
         <canvas id="barChart" width="900" height="420" aria-label="도메인별 DSI 막대그래프"></canvas>
         <div class="live-panel">
@@ -260,7 +272,7 @@
           <div id="tourDivPanel">불러오는 중…</div>
         </div>
         <div class="trend-card">
-          <h3>수용 시장 다변화 (ENM) <small>분야별 · KOFICE 국가별 관심(연 1회·안정)</small></h3>
+          <h3>수용 시장 다변화 (ENM) <small>분야별 · KOFICE 국가별 관심</small></h3>
           <div id="audDivPanel">불러오는 중…</div>
         </div>
       </div>
@@ -268,17 +280,25 @@
         <h3>위험도 R · 데이터기반 가중 <small>외부 연구자(KCIS) 조언 1단계 반영</small></h3>
         <div id="riskWeightPanel">불러오는 중…</div>
       </div>
-      <p class="muted-line">다변화 지수↑ = 특정국 쏠림↓(복원력↑). 위험도 R↑ = 특정국 의존↑(취약↑, ENM 기반 쏠림). 데이터기반 가중=Entropy-AHP(전문가 AHP × 데이터 구분력)로 전문가 고정가중과 비교. 관광=방한 외래객 국적 구성, 수용=분야별 KOFICE 국가별 관심 구성의 유효시장수(ENM=1/HHI). 출처: history.json · kwci_latest.json.</p>
+      <p class="muted-line">다변화↑=쏠림↓(복원력↑). 위험도 R↑=특정국 의존↑(취약↑, ENM 기반). 데이터기반 가중=Entropy-AHP(전문가 AHP×데이터 구분력) vs 전문가 고정(산업규모안) 비교. 출처: history.json · kwci_latest.json.</p>
+    </section>
+
+    <section class="section trends" id="heatmap">
+      <div class="section-head">
+        <div><p class="eyebrow">Country × Domain</p><h2>국가 × 도메인 히트맵 (DSI)</h2></div>
+      </div>
+      <div class="trend-card">
+        <div class="heatwrap"><canvas id="heatChart" aria-label="국가×도메인 DSI 히트맵"></canvas></div>
+        <p class="muted-line" id="heatNote">불러오는 중…</p>
+      </div>
     </section>
   </main>
 
   <footer>
-    <p>Source basis: Kwave_intro.docx · kwave_index_framework.pdf · kwci_pipeline_report.pdf</p>
-    <p>pro preview — 라이브(root) 데이터를 공유하는 실험용 정교화 버전. 안정 버전은 상단 링크.</p>
+    <p>pro preview — 라이브(root) 데이터를 공유하는 실험용 정교화 버전. 안정 버전은 상단 링크. KCVI·IPCA·MoE 미도입.</p>
   </footer>
 
   <script>
-  /* pro/ 하위경로 → 루트 데이터 참조 shim: bare *.json fetch를 ../로 리다이렉트 */
   (function(){ if(window.__proShim) return; window.__proShim=1;
     var _f = window.fetch.bind(window);
     window.fetch = function(u, o){ try{ if(typeof u==='string' && /^(kwci_latest|history|momentum_latest)\.json/.test(u)) u = '../' + u; }catch(e){} return _f(u, o); };
@@ -288,6 +308,20 @@
   <script>
   (async function(){
     const cb = '?cb=' + Date.now();
+    const NAMES = {kpop:'K팝',kvideo:'K영상',kgame:'K게임',kwebtoon:'K웹툰',kfood:'K푸드',kbeauty:'K뷰티',kfashion:'K패션',ktourism:'K관광'};
+    const ORDER = ['kpop','kvideo','kgame','kwebtoon','kfood','kbeauty','kfashion','ktourism'];
+
+    const guide = [
+      {t:"정규화 두 체제", d:"시계열은 2018=100(성장 추세), 국가 패널은 0~100 단면(상대 비교). 두 값을 직접 비교하지 마세요."},
+      {t:"DSI · KWCI", d:"DSI=0.5·L1+0.3·L2+0.2·L3(결측층 재정규화). KWCI=8도메인 가중합. 막대는 분야별 2018=100 지수."},
+      {t:"시장 다변화 (ENM)", d:"ENM=1/HHI. 값↑=여러 시장에 고르게 퍼짐(복원력↑). 관광=방한 국적 구성, 수용=KOFICE 국가별 관심."},
+      {t:"위험도 R", d:"쏠림 위험=특정국 의존도(ENM 기반). 값↑=취약. 조작·부정감성 성분은 추후 연동(정직 표기)."},
+      {t:"데이터기반 가중", d:"Entropy-AHP=전문가 AHP × 데이터 구분력(1−엔트로피). 전문가 고정(산업규모안)과 비교용 병렬."},
+      {t:"국가 × 도메인 히트맵", d:"각 국가에서 어느 분야가 강한지(DSI 0~100). 짙을수록 강함 → 국가별 맞춤 정책 진단."}
+    ];
+    const rgEl = document.getElementById('readGuide');
+    if (rgEl) rgEl.innerHTML = guide.map(g => `<div class="rg"><h4>${g.t}</h4><p>${g.d}</p></div>`).join('');
+
     function lineChart(cv, vals, labels){
       if(!cv || !vals.length) return;
       const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 320, h = cv.clientHeight || 150;
@@ -304,18 +338,22 @@
       x.fillStyle='#94a3b8'; x.font='10px sans-serif';
       if(labels.length){ x.fillText(labels[0], pad.l, h-4); const ll=labels[labels.length-1]; x.fillText(ll, w-pad.r-x.measureText(ll).width, h-4); }
     }
-    function barChart(cv, items){
+    function hbar(cv, items, mode){
       if(!cv || !items.length) return;
       const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 320, h = cv.clientHeight || 170;
       cv.width = w*dpr; cv.height = h*dpr; const x = cv.getContext('2d'); x.scale(dpr,dpr);
-      const mx = Math.max(...items.map(d=>d.v)) || 1, bh = (h-6)/items.length, lw = 44;
+      const denom = mode==='risk' ? 100 : (Math.max(...items.map(d=>d.v)) || 1);
+      const bh = (h-6)/items.length, lw = 44;
       items.forEach((d,i)=>{
-        const y = 3 + i*bh, bw = (w-lw-30) * (d.v/mx);
+        const y = 3 + i*bh, bw = (w-lw-32) * (d.v/denom);
         x.fillStyle='#475569'; x.font='11px sans-serif'; x.textBaseline='middle'; x.fillText(d.name, 0, y+bh/2);
-        x.fillStyle='#3b82f6'; x.fillRect(lw, y+2, bw, bh-6);
-        x.fillStyle='#1e293b'; x.fillText(d.v.toFixed(1), lw+bw+4, y+bh/2);
+        let col='#3b82f6';
+        if(mode==='risk'){ const t=Math.max(0,Math.min(1,d.v/100)); col='rgb('+Math.round(34+(220-34)*t)+','+Math.round(197-(197-38)*t)+','+Math.round(94-(94-38)*t)+')'; }
+        x.fillStyle=col; x.fillRect(lw, y+2, bw, bh-6);
+        x.fillStyle='#1e293b'; x.fillText((mode==='risk'?d.v.toFixed(0):d.v.toFixed(1)), lw+bw+4, y+bh/2);
       });
     }
+
     try {
       const h = await (await fetch('history.json' + cb)).json();
       const td = h.tourism_diversification || [], q = h.quarters || [];
@@ -323,49 +361,82 @@
       if (td.length) {
         const last = td[td.length - 1], first = td[0];
         const sh = h.tourism_shares || {};
-        const rows = Object.keys(sh).sort().map(function(y){
-          return '<tr><td>' + y + '</td><td style="text-align:right">' + (sh[y].CN != null ? sh[y].CN + '%' : '-') + '</td></tr>';
-        }).join('');
-        el.innerHTML = '<div style="font-size:34px;font-weight:800;color:#2563eb">' + last + '</div>'
-          + '<div style="color:#64748b;font-size:12px">' + (q.length ? q[q.length-1] : '') + ' · 2018=100 (시작 ' + first + ')</div>'
-          + '<canvas id="tourDivChart" style="width:100%;height:150px;display:block;margin:8px 0"></canvas>'
-          + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
-          + '<tr style="color:#64748b"><th style="text-align:left">연도</th><th style="text-align:right">중국 비중</th></tr>' + rows + '</table>';
+        const rows = Object.keys(sh).sort().map(y => `<tr><td>${y}</td><td style="text-align:right">${sh[y].CN != null ? sh[y].CN + '%' : '-'}</td></tr>`).join('');
+        el.innerHTML = `<div style="font-size:34px;font-weight:800;color:#2563eb">${last}</div>`
+          + `<div style="color:#64748b;font-size:12px">${q.length ? q[q.length-1] : ''} · 2018=100 (시작 ${first})</div>`
+          + `<canvas id="tourDivChart" style="width:100%;height:150px;display:block;margin:8px 0"></canvas>`
+          + `<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:#64748b"><th style="text-align:left">연도</th><th style="text-align:right">중국 비중</th></tr>${rows}</table>`;
         lineChart(document.getElementById('tourDivChart'), td, q);
       } else { el.textContent = '관광 다변화 데이터 없음'; }
     } catch (e) { var t = document.getElementById('tourDivPanel'); if (t) t.textContent = '로드 실패'; }
+
     try {
       const k = await (await fetch('kwci_latest.json' + cb)).json();
       const ad = k.audience_diversification || {};
-      const names = (k.domains || []).reduce(function(m,d){ m[d.genre] = d.genre_name; return m; }, {});
-      const order = ['kpop','kvideo','kgame','kwebtoon','kfood','kbeauty','kfashion','ktourism'];
       const el = document.getElementById('audDivPanel');
-      const list = order.filter(function(g){ return ad[g] && ad[g].enm != null; });
-      const rows = list.map(function(g){
-        const d = ad[g];
-        const yt = (d.youtube_enm != null) ? d.youtube_enm : '-';
-        return '<tr><td>' + (names[g] || g) + '</td><td style="text-align:right">' + d.enm + '</td><td style="text-align:right">' + d.enm_pct + '%</td><td>' + d.top_country + ' ' + d.top_share_pct + '%</td><td style="text-align:right;color:#94a3b8">' + yt + '</td></tr>';
-      }).join('');
+      const list = ORDER.filter(g => ad[g] && ad[g].enm != null);
+      const rows = list.map(g => { const d = ad[g]; const yt = (d.youtube_enm != null) ? d.youtube_enm : '-';
+        return `<tr><td>${NAMES[g]||g}</td><td style="text-align:right">${d.enm}</td><td style="text-align:right">${d.enm_pct}%</td><td>${d.top_country} ${d.top_share_pct}%</td><td style="text-align:right;color:#94a3b8">${yt}</td></tr>`; }).join('');
       el.innerHTML = list.length
-        ? '<canvas id="audDivChart" style="width:100%;height:175px;display:block;margin-bottom:8px"></canvas>'
-        + '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:#64748b"><th style="text-align:left">분야</th><th style="text-align:right">ENM</th><th style="text-align:right">최대대비</th><th style="text-align:left">최다 관심국(KOFICE)</th><th style="text-align:right">YT참고</th></tr>' + rows + '</table>'
-        + '<div style="font-size:11px;color:#94a3b8;margin-top:6px">ENM·최다 관심국 = KOFICE 설문(안정) 기준. YT참고 = YouTube 단면 ENM(노이즈, 비교용).</div>'
+        ? `<canvas id="audDivChart" style="width:100%;height:175px;display:block;margin-bottom:8px"></canvas>`
+        + `<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:#64748b"><th style="text-align:left">분야</th><th style="text-align:right">ENM</th><th style="text-align:right">최대대비</th><th style="text-align:left">최다 관심국</th><th style="text-align:right">YT참고</th></tr>${rows}</table>`
+        + `<div style="font-size:11px;color:#94a3b8;margin-top:6px">ENM·최다 관심국 = KOFICE 설문 기준. YT참고 = YouTube 단면 ENM(노이즈, 비교용).</div>`
         : '수용 다변화 데이터 없음(다음 자동수집 후 표시).';
-      if (list.length) barChart(document.getElementById('audDivChart'), list.map(function(g){ return {name:(names[g]||g), v:ad[g].enm}; }));
+      if (list.length) hbar(document.getElementById('audDivChart'), list.map(g => ({name:(NAMES[g]||g), v:ad[g].enm})), 'enm');
 
       try {
         const rw = document.getElementById('riskWeightPanel');
         const risk = k.risk || {}; const per = risk.per_domain || {};
         const ddw = (k.data_driven_weights && k.data_driven_weights.weights) || {};
         const ind = (k.weight_profiles && k.weight_profiles.industry && k.weight_profiles.industry.weights) || {};
-        const rrows = order.filter(function(g){ return per[g] && per[g].R_concentration != null; }).map(function(g){
-          return '<tr><td>' + (names[g] || g) + '</td><td style="text-align:right;color:#dc2626">' + per[g].R_concentration + '</td><td style="text-align:right">' + (ddw[g] != null ? ddw[g] : '-') + '</td><td style="text-align:right;color:#94a3b8">' + (ind[g] != null ? ind[g] : '-') + '</td></tr>';
-        }).join('');
-        rw.innerHTML = (risk.global_R_concentration != null ? '<div style="font-size:13px;color:#334155;margin-bottom:8px">글로벌 위험도 R(쏠림): <b style="color:#dc2626;font-size:16px">' + risk.global_R_concentration + '</b> <span style="color:#94a3b8">(0~100, 값↑=특정국 의존↑=취약↑)</span></div>' : '')
-          + (rrows ? '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:#64748b"><th style="text-align:left">분야</th><th style="text-align:right">위험도 R</th><th style="text-align:right">가중 Entropy-AHP</th><th style="text-align:right">가중 산업규모안</th></tr>' + rrows + '</table>' : '위험도 데이터 없음')
-          + '<div style="font-size:11px;color:#94a3b8;margin-top:6px">R = 쏠림 위험(ENM 기반 concentration). 조작·부정감성 R은 주간 패널·감성분석 연동 후. 가중 = 데이터기반 Entropy-AHP(θ·AHP+(1-θ)·Entropy) vs 전문가 고정(산업규모안) 비교. 외부 연구자(KCIS) 제안 1단계.</div>';
+        const rlist = ORDER.filter(g => per[g] && per[g].R_concentration != null);
+        const rrows = rlist.map(g => `<tr><td>${NAMES[g]||g}</td><td style="text-align:right;color:#dc2626">${per[g].R_concentration}</td><td style="text-align:right">${ddw[g]!=null?ddw[g]:'-'}</td><td style="text-align:right;color:#94a3b8">${ind[g]!=null?ind[g]:'-'}</td></tr>`).join('');
+        rw.innerHTML = (risk.global_R_concentration != null ? `<div style="font-size:13px;color:#334155;margin-bottom:8px">글로벌 위험도 R(쏠림): <b style="color:#dc2626;font-size:16px">${risk.global_R_concentration}</b> <span style="color:#94a3b8">(0~100, 값↑=특정국 의존↑=취약↑)</span></div>` : '')
+          + `<div class="trends-grid" style="grid-template-columns:1fr 1fr">`
+          + `<div><div style="font-size:12px;color:#64748b;margin-bottom:2px">분야별 위험도 R (녹색=안전 · 적색=취약)</div><canvas id="riskBars" style="width:100%;height:180px;display:block"></canvas></div>`
+          + `<div><div style="font-size:12px;color:#64748b;margin-bottom:2px">데이터기반 가중 Entropy-AHP (%)</div><canvas id="wCmp" style="width:100%;height:180px;display:block"></canvas></div>`
+          + `</div>`
+          + `<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:8px"><tr style="color:#64748b"><th style="text-align:left">분야</th><th style="text-align:right">위험도 R</th><th style="text-align:right">가중 Entropy-AHP</th><th style="text-align:right">가중 산업규모안</th></tr>${rrows}</table>`
+          + `<div style="font-size:11px;color:#94a3b8;margin-top:6px">R=쏠림 위험(ENM 기반). 조작·부정감성 R은 주간 패널·감성분석 후. 가중=데이터기반 Entropy-AHP(θ·AHP+(1−θ)·Entropy) vs 전문가 고정(산업규모안). 외부 연구자(KCIS) 제안 1단계.</div>`;
+        if (rlist.length) {
+          hbar(document.getElementById('riskBars'), rlist.map(g => ({name:(NAMES[g]||g), v:per[g].R_concentration})), 'risk');
+          hbar(document.getElementById('wCmp'), rlist.map(g => ({name:(NAMES[g]||g), v:(ddw[g]!=null?ddw[g]*100:0)})), 'enm');
+        }
       } catch (e) { var rw2 = document.getElementById('riskWeightPanel'); if (rw2) rw2.textContent = '로드 실패'; }
     } catch (e) { var a = document.getElementById('audDivPanel'); if (a) a.textContent = '로드 실패'; }
+
+    (async function loadHeatmap(){
+      const el = document.getElementById('heatChart'), note = document.getElementById('heatNote');
+      if (!el) return;
+      function ymd(d){ return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+      const nowKST = new Date(Date.now() + 9*3600*1000);
+      let text = null, used = null;
+      for (let i=0;i<9;i++){ const d = new Date(nowKST); d.setDate(d.getDate()-i);
+        try { const r = await fetch('../data/output/' + ymd(d) + '_kwci_panel.csv', {cache:'no-store'}); if (r.ok){ text = await r.text(); used = ymd(d); break; } } catch(e){} }
+      if (!text){ note.textContent = '패널 데이터(data/output/*_kwci_panel.csv)를 찾지 못했습니다.'; return; }
+      const lines = text.replace(/^﻿/,'').trim().split(/\r?\n/);
+      const hdr = lines[0].split(','); const ci = hdr.indexOf('country'), gi = hdr.indexOf('genre'), di = hdr.indexOf('dsi');
+      const M = {}, countries = [];
+      for (let i=1;i<lines.length;i++){ const c = lines[i].split(','); const co=c[ci], g=c[gi], v=parseFloat(c[di]);
+        if (!co || !g) continue; if (!M[co]){ M[co] = {}; countries.push(co); } M[co][g] = v; }
+      countries.sort((a,b)=>{ const sa=ORDER.reduce((s,g)=>s+(M[a][g]||0),0), sb=ORDER.reduce((s,g)=>s+(M[b][g]||0),0); return sb-sa; });
+      const dpr = window.devicePixelRatio || 1;
+      const avail = (el.parentElement.clientWidth || 700) - 60;
+      const cell = Math.max(34, Math.min(70, avail / ORDER.length)), rowH = 24, padL = 52, padT = 74;
+      const W = padL + cell*ORDER.length + 8, H = padT + rowH*countries.length + 8;
+      el.style.width = W + 'px'; el.style.height = H + 'px'; el.width = W*dpr; el.height = H*dpr;
+      const x = el.getContext('2d'); x.scale(dpr,dpr); x.clearRect(0,0,W,H);
+      function color(v){ v = Math.max(0,Math.min(100,v)); const t = v/100; return 'rgb(' + Math.round(239-(239-29)*t) + ',' + Math.round(246-(246-95)*t) + ',' + Math.round(255-(255-209)*t) + ')'; }
+      ORDER.forEach((g,j)=>{ x.save(); x.translate(padL + j*cell + cell/2, padT-8); x.rotate(-Math.PI/5); x.textAlign='left'; x.fillStyle='#334155'; x.font='11px sans-serif'; x.fillText(NAMES[g]||g, 0, 0); x.restore(); });
+      countries.forEach((co,i)=>{ const y = padT + i*rowH;
+        x.fillStyle='#334155'; x.textAlign='right'; x.font='11px sans-serif'; x.fillText(co, padL-6, y+rowH/2+3);
+        ORDER.forEach((g,j)=>{ const v = M[co][g]; const cx = padL + j*cell;
+          x.fillStyle = (v==null||isNaN(v)) ? '#f1f5f9' : color(v); x.fillRect(cx+1, y+1, cell-2, rowH-2);
+          if (v!=null && !isNaN(v)){ x.fillStyle = v>55 ? '#fff' : '#334155'; x.textAlign='center'; x.font='10px sans-serif'; x.fillText(Math.round(v), cx+cell/2, y+rowH/2+3); }
+        });
+      });
+      note.textContent = '셀 = 국가별 도메인 DSI(0~100, 횡단). 짙을수록 강함. 국가는 평균 DSI 내림차순. 출처: data/output/' + used + '_kwci_panel.csv';
+    })();
   })();
   </script>
 </body>
