@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KWCI | 정교화 미리보기 (pro)</title>
+  <link rel="stylesheet" href="../styles.css">
+  <style>
+    .prebar{background:#0f172a;color:#e2e8f0;font-size:12px;padding:6px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .prebar a{color:#93c5fd;text-decoration:none;font-weight:600}
+    .prebar b{color:#fbbf24}
+    .trends-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:20px}
+    @media(max-width:860px){.trends-grid{grid-template-columns:1fr}}
+    .trend-card{background:#fff;border:1px solid #e6ebf1;border-radius:14px;padding:18px}
+    .trend-card h3{margin:0 0 10px}
+    .trend-card h3 small{color:#8a97a6;font-weight:500}
+    #historyChart{width:100%;height:320px}
+    .trend-legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+    .trend-legend .lg{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:#3a4654}
+    .trend-legend .lg i{width:12px;height:12px;border-radius:3px;display:inline-block}
+    .latest-row.mom{grid-template-columns:1fr 2fr auto}
+  </style>
+</head>
+<body>
+  <div class="prebar">
+    <span><b>정교화 미리보기 (pro)</b> — 실험용 · 라이브 데이터 공유</span>
+    <a href="../">← 안정 버전(라이브)로</a>
+  </div>
+  <header class="topbar">
+    <a class="brand" href="#overview" aria-label="KWCI 홈">
+      <span class="brand-mark">K</span>
+      <span>
+        <strong>KWCI</strong>
+        <small>K-Wave Composite Index · pro</small>
+      </span>
+    </a>
+    <nav aria-label="주요 섹션">
+      <a href="#domains">도메인</a>
+      <a href="#method">산식</a>
+      <a href="#pipeline">수집</a>
+      <a href="#dashboard">대시보드</a>
+      <a href="#trends">추이</a>
+      <a href="#diversification">다변화</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="overview">
+      <div class="hero-copy">
+        <p class="eyebrow">K-wave index framework · 2026 · pro preview</p>
+        <h1>한류를 장르가 아니라 움직이는 복합 생태계로 측정합니다.</h1>
+        <p>
+          KWCI는 경제지표(L1)·문화적 영향력(L2)·수용자 반응(L3)을 결합해 K-pop·K영상·게임·웹툰·
+          푸드·패션·뷰티·관광 8개 산업 분야의 한류 흐름을 분기 단위로 추적하는 종합 지수입니다.
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#dashboard">지수 보기</a>
+          <a class="button secondary" href="#pipeline">수집 계획</a>
+        </div>
+      </div>
+      <div class="hero-panel" aria-label="지수 핵심 구조">
+        <div class="score-card">
+          <div>
+            <span>K-Wave 종합지수 (2018=100)</span>
+            <strong>KWCI <span id="heroKwci">—</span></strong>
+          </div>
+        </div>
+        <div class="layer-grid">
+          <div><b>L1</b><span>경제지표</span></div>
+          <div><b>L2</b><span>플랫폼 데이터</span></div>
+          <div><b>L3</b><span>정성 아카이브</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section intro">
+      <div>
+        <p class="eyebrow">Design Principle</p>
+        <h2>분야 × 지표 × 담론</h2>
+      </div>
+      <p>
+        이 웹페이지는 <b>Kwave_intro.docx</b>의 큰 그림을 바탕으로 한류를 콘텐츠·상품 영역,
+        수용·소비 지표, 담론·인식 지표의 매트릭스로 정리하고, <b>kwave_index_framework.pdf</b>와
+        <b>kwci_pipeline_report.pdf</b>의 실행 플랜을 따라 데이터 수집, 정규화, 가중합산, 운영체계까지 연결합니다.
+      </p>
+    </section>
+
+    <section class="section" id="domains">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Domain Sub-Index</p>
+          <h2>8개 도메인 지수</h2>
+        </div>
+        <div class="tabs" role="tablist" aria-label="도메인 선택"></div>
+      </div>
+      <div class="domain-layout">
+        <article class="domain-detail" aria-live="polite"></article>
+        <aside class="weight-panel">
+          <h3>초기 가중치</h3>
+          <div class="weight-list"></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section method" id="method">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Methodology</p>
+          <h2>산출 방식</h2>
+        </div>
+      </div>
+      <div class="method-grid">
+        <article>
+          <span>Step 1</span>
+          <h3>원시 지표 정규화</h3>
+          <code>x_norm = (x_t - x_min) / (x_max - x_min) × 100</code>
+          <p>2018Q1부터 현재까지의 시계열을 0-100 구간으로 변환합니다.</p>
+        </article>
+        <article>
+          <span>Step 2</span>
+          <h3>DSI 산출</h3>
+          <code>DSI = .5L1 + .3L2 + .2L3</code>
+          <p>경제지표·플랫폼 데이터·정성 아카이브를 도메인별 서브 인덱스로 합산합니다.</p>
+        </article>
+        <article>
+          <span>Step 3</span>
+          <h3>KWCI 가중합</h3>
+          <code>KWCI = Σ(w_i × DSI_i)</code>
+          <p>8개 도메인의 가중평균으로 종합 한류 지수를 만듭니다.</p>
+        </article>
+        <article>
+          <span>Step 4</span>
+          <h3>기준연도 지수화</h3>
+          <code>KWCI_index = KWCI / KWCI_2018 × 100</code>
+          <p>분기별 지수를 기준연도 2018=100으로 해석 가능하게 만듭니다.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section pipeline" id="pipeline">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Data Operations</p>
+          <h2>데이터 수집 실행 플랜</h2>
+        </div>
+      </div>
+      <div class="pipeline-track">
+        <div><b>L1 경제지표</b><span>수출액, 매출, 관광수입, 시장 규모</span></div>
+        <div><b>L2 플랫폼 데이터</b><span>국가별 YouTube, Google Trends, KF API, OTT·차트 지표</span></div>
+        <div><b>L3 정성 아카이브</b><span>언론, 비평, 전시·수상, 연구팀 큐레이션 기록</span></div>
+        <div><b>출력</b><span>국가 × 분기 × 도메인 패널과 KWCI 보고서</span></div>
+      </div>
+      <div class="source-grid"></div>
+    </section>
+
+    <section class="section l2-module" id="l2-module">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Realtime Module</p>
+          <h2>국가별 실시간 보정 모듈</h2>
+        </div>
+      </div>
+      <div class="module-layout">
+        <article class="module-card lead">
+          <h3>KWCI 안에서의 위치</h3>
+          <p>
+            분기 단위 8도메인 DSI(본지수) 위에 얹는 국가별 실시간 보정 장치입니다. KOFICE 해외한류실태조사를
+            연 1회 기준선으로 두고, YouTube·Google Trends가 수용자(L3) 신호의 단기 변동을, KF 한류현황 API가
+            팬덤 인프라를 보정합니다. 본지수의 분기 구조를 대체하지 않는 보조 신호입니다.
+          </p>
+          <code>GSI(c,d) = .40·S_norm + .35·Y_norm + .25·T_norm</code>
+          <code>Module(c) = Σ(w_d · GSI(c,d)) + .05·KF_norm(c)</code>
+          <p class="muted-line">S=KOFICE 설문, Y=YouTube, T=Google Trends, KF=팬덤 인프라. L3 하위가중 0.40/0.35/0.25이며, 도메인 가중 w_d는 본지수와 동일한 8도메인 프로파일(현재 문화중심)을 사용합니다.</p>
+        </article>
+        <article class="module-card">
+          <h3>대상 국가 (15)</h3>
+          <p>미국, 중국, 일본, 베트남, 태국, 인도네시아, 인도, 말레이시아, 프랑스, 영국, 브라질, 아르헨티나, UAE, 터키, 남아공</p>
+        </article>
+        <article class="module-card">
+          <h3>8개 도메인</h3>
+          <p>K-pop · K영상 · K게임 · K웹툰 · K푸드 · K뷰티 · K패션 · K관광 — 본지수와 동일 단위(구 6장르 체계 폐지).</p>
+        </article>
+        <article class="module-card">
+          <h3>핵심 수집원</h3>
+          <ul>
+            <li>KOFICE 해외한류실태조사: 연 1회 국가·도메인 기준선</li>
+            <li>KF 한류현황 API: 조직·팬클럽 인프라 보정</li>
+            <li>YouTube Data API: 국가별 K-콘텐츠 조회수</li>
+            <li>Google Trends(pytrends): 분야별 국가 검색 관심도</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <h3>운영 주기</h3>
+          <ul>
+            <li>일별: YouTube·Google Trends 수집·정규화·보정값 산출</li>
+            <li>주별: KF API 갱신과 팬덤 인프라 보정</li>
+            <li>연간: KOFICE 설문 기반 국가·도메인 기준선 재설정</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section dashboard" id="dashboard">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Prototype Dashboard</p>
+          <h2>시범 지수 보드</h2>
+        </div>
+        <label class="control">
+          <span>가중치: 경제중심(2축) 보기</span>
+          <input type="checkbox" id="diversityToggle">
+        </label>
+      </div>
+      <div class="dashboard-grid">
+        <div class="index-meter">
+          <span>현재 KWCI (2018=100)</span>
+          <strong id="kwciValue">—</strong>
+          <small>막대 = 분야별 현재 지수(2018=100). 100 = 2018년 수준. 추세는 아래 '추이' 차트.</small>
+          <small class="src-note">출처(2018=100, 2018–2025): 콘텐츠 4분야(K-pop·K영상·게임·웹툰)=KOSIS, 푸드·패션·뷰티=관세청 무역통계(가공식품·의류·화장품 HS) 라이브 실측, 관광=KOSIS 국적별 외래객(orgId=111). ※ K웹툰은 ‘만화 수출’(웹툰 포함, 종이 만화 아님), K푸드는 가공식품(라면·김치 등) 수출 기준이라 총농식품보다 증가율이 높을 수 있습니다. 2018 저(低)베이스 유의. 별도 항목으로 <b>관광 다각화 지수</b>(source-market 다변화·중국 의존도, 2018=100)를 history.json에 제공.</small>
+        </div>
+        <canvas id="barChart" width="900" height="420" aria-label="도메인별 DSI 막대그래프"></canvas>
+        <div class="live-panel">
+          <h3>국가 간 상대 비교 (현재 단면, 0~100)</h3>
+          <div id="l2Latest">아직 산출 파일을 읽지 못했습니다.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section trends" id="trends">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Time Series</p>
+          <h2>분기 추이 · 월간 모멘텀</h2>
+        </div>
+      </div>
+      <div class="trends-grid">
+        <div class="trend-card">
+          <h3>경제 백본 지수 추이 <small>(2018=100 · 2021Q1~)</small></h3>
+          <canvas id="historyChart" height="320" aria-label="분기별 경제 백본 지수 라인차트"></canvas>
+          <div id="historyLegend" class="trend-legend"></div>
+          <p class="muted-line" id="historyNote"></p>
+        </div>
+        <div class="trend-card">
+          <h3>월간 모멘텀 <small>(nowcast)</small></h3>
+          <div id="momentumPanel">아직 산출 파일을 읽지 못했습니다.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section trends" id="diversification">
+      <div class="section-head">
+        <div>
+          <p class="eyebrow">Diversification &amp; Risk</p>
+          <h2>시장 다변화 · 위험도</h2>
+        </div>
+      </div>
+      <div class="trends-grid">
+        <div class="trend-card">
+          <h3>관광 source-market 다변화 <small>(2018=100 · 국적 구성)</small></h3>
+          <div id="tourDivPanel">불러오는 중…</div>
+        </div>
+        <div class="trend-card">
+          <h3>수용 시장 다변화 (ENM) <small>분야별 · KOFICE 국가별 관심(연 1회·안정)</small></h3>
+          <div id="audDivPanel">불러오는 중…</div>
+        </div>
+      </div>
+      <div class="trend-card" style="margin-top:16px">
+        <h3>위험도 R · 데이터기반 가중 <small>외부 연구자(KCIS) 조언 1단계 반영</small></h3>
+        <div id="riskWeightPanel">불러오는 중…</div>
+      </div>
+      <p class="muted-line">다변화 지수↑ = 특정국 쏠림↓(복원력↑). 위험도 R↑ = 특정국 의존↑(취약↑, ENM 기반 쏠림). 데이터기반 가중=Entropy-AHP(전문가 AHP × 데이터 구분력)로 전문가 고정가중과 비교. 관광=방한 외래객 국적 구성, 수용=분야별 KOFICE 국가별 관심 구성의 유효시장수(ENM=1/HHI). 출처: history.json · kwci_latest.json.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Source basis: Kwave_intro.docx · kwave_index_framework.pdf · kwci_pipeline_report.pdf</p>
+    <p>pro preview — 라이브(root) 데이터를 공유하는 실험용 정교화 버전. 안정 버전은 상단 링크.</p>
+  </footer>
+
+  <script>
+  /* pro/ 하위경로 → 루트 데이터 참조 shim: bare *.json fetch를 ../로 리다이렉트 */
+  (function(){ if(window.__proShim) return; window.__proShim=1;
+    var _f = window.fetch.bind(window);
+    window.fetch = function(u, o){ try{ if(typeof u==='string' && /^(kwci_latest|history|momentum_latest)\.json/.test(u)) u = '../' + u; }catch(e){} return _f(u, o); };
+  })();
+  </script>
+  <script src="../script.js"></script>
+  <script>
+  (async function(){
+    const cb = '?cb=' + Date.now();
+    function lineChart(cv, vals, labels){
+      if(!cv || !vals.length) return;
+      const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 320, h = cv.clientHeight || 150;
+      cv.width = w*dpr; cv.height = h*dpr; const x = cv.getContext('2d'); x.scale(dpr,dpr);
+      const pad = {l:32,r:12,t:12,b:18};
+      const mn = Math.min(100, ...vals), mx = Math.max(100, ...vals);
+      const X = i => pad.l + (w-pad.l-pad.r) * (i/((vals.length-1)||1));
+      const Y = v => pad.t + (h-pad.t-pad.b) * (1 - (v-mn)/((mx-mn)||1));
+      x.strokeStyle='#e2e8f0'; x.lineWidth=1; x.beginPath(); x.moveTo(pad.l, Y(100)); x.lineTo(w-pad.r, Y(100)); x.stroke();
+      x.fillStyle='#94a3b8'; x.font='10px sans-serif'; x.fillText('100', 4, Y(100)+3);
+      x.strokeStyle='#2563eb'; x.lineWidth=2; x.beginPath();
+      vals.forEach((v,i)=>{ i ? x.lineTo(X(i),Y(v)) : x.moveTo(X(i),Y(v)); }); x.stroke();
+      const li = vals.length-1; x.fillStyle='#2563eb'; x.beginPath(); x.arc(X(li),Y(vals[li]),3,0,Math.PI*2); x.fill();
+      x.fillStyle='#94a3b8'; x.font='10px sans-serif';
+      if(labels.length){ x.fillText(labels[0], pad.l, h-4); const ll=labels[labels.length-1]; x.fillText(ll, w-pad.r-x.measureText(ll).width, h-4); }
+    }
+    function barChart(cv, items){
+      if(!cv || !items.length) return;
+      const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 320, h = cv.clientHeight || 170;
+      cv.width = w*dpr; cv.height = h*dpr; const x = cv.getContext('2d'); x.scale(dpr,dpr);
+      const mx = Math.max(...items.map(d=>d.v)) || 1, bh = (h-6)/items.length, lw = 44;
+      items.forEach((d,i)=>{
+        const y = 3 + i*bh, bw = (w-lw-30) * (d.v/mx);
+        x.fillStyle='#475569'; x.font='11px sans-serif'; x.textBaseline='middle'; x.fillText(d.name, 0, y+bh/2);
+        x.fillStyle='#3b82f6'; x.fillRect(lw, y+2, bw, bh-6);
+        x.fillStyle='#1e293b'; x.fillText(d.v.toFixed(1), lw+bw+4, y+bh/2);
+      });
+    }
+    try {
+      const h = await (await fetch('history.json' + cb)).json();
+      const td = h.tourism_diversification || [], q = h.quarters || [];
+      const el = document.getElementById('tourDivPanel');
+      if (td.length) {
+        const last = td[td.length - 1], first = td[0];
+        const sh = h.tourism_shares || {};
+        const rows = Object.keys(sh).sort().map(function(y){
+          return '<tr><td>' + y + '</td><td style="text-align:right">' + (sh[y].CN != null ? sh[y].CN + '%' : '-') + '</td></tr>';
+        }).join('');
+        el.innerHTML = '<div style="font-size:34px;font-weight:800;color:#2563eb">' + last + '</div>'
+          + '<div style="color:#64748b;font-size:12px">' + (q.length ? q[q.length-1] : '') + ' · 2018=100 (시작 ' + first + ')</div>'
+          + '<canvas id="tourDivChart" style="width:100%;height:150px;display:block;margin:8px 0"></canvas>'
+          + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
+          + '<tr style="color:#64748b"><th style="text-align:left">연도</th><th style="text-align:right">중국 비중</th></tr>' + rows + '</table>';
+        lineChart(document.getElementById('tourDivChart'), td, q);
+      } else { el.textContent = '관광 다변화 데이터 없음'; }
+    } catch (e) { var t = document.getElementById('tourDivPanel'); if (t) t.textContent = '로드 실패'; }
+    try {
+      const k = await (await fetch('kwci_latest.json' + cb)).json();
+      const ad = k.audience_diversification || {};
+      const names = (k.domains || []).reduce(function(m,d){ m[d.genre] = d.genre_name; return m; }, {});
+      const order = ['kpop','kvideo','kgame','kwebtoon','kfood','kbeauty','kfashion','ktourism'];
+      const el = document.getElementById('audDivPanel');
+      const list = order.filter(function(g){ return ad[g] && ad[g].enm != null; });
+      const rows = list.map(function(g){
+        const d = ad[g];
+        const yt = (d.youtube_enm != null) ? d.youtube_enm : '-';
+        return '<tr><td>' + (names[g] || g) + '</td><td style="text-align:right">' + d.enm + '</td><td style="text-align:right">' + d.enm_pct + '%</td><td>' + d.top_country + ' ' + d.top_share_pct + '%</td><td style="text-align:right;color:#94a3b8">' + yt + '</td></tr>';
+      }).join('');
+      el.innerHTML = list.length
+        ? '<canvas id="audDivChart" style="width:100%;height:175px;display:block;margin-bottom:8px"></canvas>'
+        + '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:#64748b"><th style="text-align:left">분야</th><th style="text-align:right">ENM</th><th style="text-align:right">최대대비</th><th style="text-align:left">최다 관심국(KOFICE)</th><th style="text-align:right">YT참고</th></tr>' + rows + '</table>'
+        + '<div style="font-size:11px;color:#94a3b8;margin-top:6px">ENM·최다 관심국 = KOFICE 설문(안정) 기준. YT참고 = YouTube 단면 ENM(노이즈, 비교용).</div>'
+        : '수용 다변화 데이터 없음(다음 자동수집 후 표시).';
+      if (list.length) barChart(document.getElementById('audDivChart'), list.map(function(g){ return {name:(names[g]||g), v:ad[g].enm}; }));
+
+      try {
+        const rw = document.getElementById('riskWeightPanel');
+        const risk = k.risk || {}; const per = risk.per_domain || {};
+        const ddw = (k.data_driven_weights && k.data_driven_weights.weights) || {};
+        const ind = (k.weight_profiles && k.weight_profiles.industry && k.weight_profiles.industry.weights) || {};
+        const rrows = order.filter(function(g){ return per[g] && per[g].R_concentration != null; }).map(function(g){
+          return '<tr><td>' + (names[g] || g) + '</td><td style="text-align:right;color:#dc2626">' + per[g].R_concentration + '</td><td style="text-align:right">' + (ddw[g] != null ? ddw[g] : '-') + '</td><td style="text-align:right;color:#94a3b8">' + (ind[g] != null ? ind[g] : '-') + '</td></tr>';
+        }).join('');
+        rw.innerHTML = (risk.global_R_concentration != null ? '<div style="font-size:13px;color:#334155;margin-bottom:8px">글로벌 위험도 R(쏠림): <b style="color:#dc2626;font-size:16px">' + risk.global_R_concentration + '</b> <span style="color:#94a3b8">(0~100, 값↑=특정국 의존↑=취약↑)</span></div>' : '')
+          + (rrows ? '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:#64748b"><th style="text-align:left">분야</th><th style="text-align:right">위험도 R</th><th style="text-align:right">가중 Entropy-AHP</th><th style="text-align:right">가중 산업규모안</th></tr>' + rrows + '</table>' : '위험도 데이터 없음')
+          + '<div style="font-size:11px;color:#94a3b8;margin-top:6px">R = 쏠림 위험(ENM 기반 concentration). 조작·부정감성 R은 주간 패널·감성분석 연동 후. 가중 = 데이터기반 Entropy-AHP(θ·AHP+(1-θ)·Entropy) vs 전문가 고정(산업규모안) 비교. 외부 연구자(KCIS) 제안 1단계.</div>';
+      } catch (e) { var rw2 = document.getElementById('riskWeightPanel'); if (rw2) rw2.textContent = '로드 실패'; }
+    } catch (e) { var a = document.getElementById('audDivPanel'); if (a) a.textContent = '로드 실패'; }
+  })();
+  </script>
+</body>
+</html>
