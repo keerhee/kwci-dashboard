@@ -5,6 +5,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from . import config
@@ -85,11 +86,53 @@ def profile_comparison(scored: pd.DataFrame) -> dict:
     return out
 
 
+# ── 데이터기반 가중(Entropy-AHP) — 외부 연구자(KCIS weighting/entropy_ahp.py) 조언 1단계 반영 ──
+# w = θ·AHP + (1-θ)·Entropy. 소표본 즉시 적용 가능분만 채택. IPCA·MoE(2단계)는 60주 축적 후.
+def _entropy_weights(X: np.ndarray) -> np.ndarray:
+    """열(도메인)별 엔트로피 '구분력' 가중. X: (국가 × 도메인) DSI 행렬."""
+    X = np.asarray(X, dtype=float)
+    n = X.shape[0]
+    if n < 2 or X.shape[1] == 0:
+        m = max(X.shape[1], 1)
+        return np.array([1.0 / m] * m)
+    rng = X.max(0) - X.min(0)
+    Xn = (X - X.min(0)) / (rng + 1e-9) + 1e-6
+    P = Xn / Xn.sum(0)
+    E = -(1.0 / math.log(n)) * (P * np.log(P)).sum(0)   # 엔트로피
+    d = 1.0 - E                                          # 구분력(=1-엔트로피)
+    s = d.sum() or 1.0
+    return d / s
+
+
+def entropy_ahp_weights(scored: pd.DataFrame, theta: float = 0.5):
+    """w = θ·AHP + (1-θ)·Entropy. AHP=산업규모안(전문가 사전), Entropy=DSI 횡단 구분력."""
+    piv = scored.pivot_table(index="country", columns="genre", values="dsi", aggfunc="first").fillna(0.0)
+    genres = list(piv.columns)
+    w_ent = _entropy_weights(piv.values)
+    ahp = np.array([config.GENRE_WEIGHTS.get(g, 0.0) for g in genres], dtype=float)
+    ahp = ahp / (ahp.sum() or 1.0)
+    w = theta * ahp + (1.0 - theta) * w_ent
+    w = w / (w.sum() or 1.0)
+    hybrid = {g: round(float(w[i]), 4) for i, g in enumerate(genres)}
+    ent = {g: round(float(w_ent[i]), 4) for i, g in enumerate(genres)}
+    return hybrid, ent
+
+
+def _profile_stats(scored: pd.DataFrame, w: dict) -> dict:
+    """주어진 가중 w로 국가 KWCI를 재계산해 글로벌평균·상위3국 산출."""
+    piv = scored.pivot_table(index="country", columns="genre", values="dsi", aggfunc="first")
+    kwci_c = sum(piv[g] * w.get(g, 0) for g in piv.columns).clip(upper=100)
+    ranked = kwci_c.sort_values(ascending=False)
+    return {"weights": {g: round(w[g], 4) for g in w},
+            "global_mean": round(float(kwci_c.mean()), 2),
+            "top3": list(ranked.head(3).index)}
+
+
 def score_panel(panel):
     """프레임워크 L1/L2/L3 → DSI → KWCI 산출.
 
-    현재 신호 매핑: L2=KF 한류인프라, L3=KOFICE 설문·YouTube·Reddit.
-    L1(경제)은 수집기 미구현 → 도메인 층위가중을 L2·L3로 재정규화(프레임워크 결측규칙).
+    현재 신호 매핑: L2=KF 한류인프라, L3=KOFICE 설문·YouTube·Google Trends.
+    L1(경제)은 국가별 수집분만 반영(관세청·KTO) → 도메인 층위가중을 재정규화(프레임워크 결측규칙).
     """
     s = panel.copy()
     # L3 내부 신호 정규화 (장르별 Min-Max)
@@ -216,6 +259,34 @@ def audience_diversification(scored: pd.DataFrame) -> dict:
     return out
 
 
+# ── 위험도 R — 외부 연구자(KCIS shared/risk.py) 조언 1단계 반영 ──
+# 현재 데이터로 실산출 가능한 '쏠림(concentration)'만 계산. 조작·부정감성은 주간 패널·감성분석 연동 후.
+def risk_block(aud_div: dict, tour_enm: float | None = None) -> dict:
+    """R_conc = clamp(100 - ENM·(100/(warn·2.5))). ENM↓(쏠림↑) → R↑. (연구자 concentration() 이식)"""
+    warn = float(getattr(config, "ENM_WARN_BELOW", 8.0))
+    k = 100.0 / (warn * 2.5)
+
+    def conc(enm):
+        if enm is None:
+            return None
+        return round(max(0.0, min(100.0, 100.0 - float(enm) * k)), 1)
+
+    per = {}
+    for gname, d in aud_div.items():
+        e = d.get("enm")
+        per[gname] = {"R_concentration": conc(e), "enm": e,
+                      "top_country": d.get("top_country"), "top_share_pct": d.get("top_share_pct")}
+    vals = [v["R_concentration"] for v in per.values() if v["R_concentration"] is not None]
+    return {
+        "per_domain": per,
+        "global_R_concentration": round(sum(vals) / len(vals), 1) if vals else None,
+        "tourism_R_concentration": conc(tour_enm) if tour_enm is not None else None,
+        "components_wired": ["concentration(ENM)"],
+        "components_pending": ["manipulation(주간 조회수·봇)", "negative(댓글 감성분석)"],
+        "warn_enm_below": warn,
+    }
+
+
 def export_outputs(scored: pd.DataFrame, country: pd.DataFrame, extras: dict | None = None) -> dict[str, Path]:
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     date_label = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
@@ -236,6 +307,17 @@ def export_outputs(scored: pd.DataFrame, country: pd.DataFrame, extras: dict | N
                    "min_country": gsum["min_country"]["country"]}]).to_csv(
         global_path, index=False, encoding="utf-8-sig")
 
+    aud = audience_diversification(scored)
+
+    # 데이터기반 가중(Entropy-AHP)을 프로파일에 추가 + 위험도 R 산출 (연구자 KCIS 1단계)
+    wp = profile_comparison(scored)
+    try:
+        hybrid, w_ent = entropy_ahp_weights(scored, theta=0.5)
+        wp["entropy_ahp"] = _profile_stats(scored, hybrid)
+    except Exception:  # noqa: BLE001
+        hybrid, w_ent = {}, {}
+    risk = risk_block(aud)
+
     latest = {
         "date": date_label,
         "framework": "KWCI L1/L2/L3 DSI model",
@@ -251,13 +333,20 @@ def export_outputs(scored: pd.DataFrame, country: pd.DataFrame, extras: dict | N
         "layer_weights": config.LAYER_WEIGHTS,
         "active_weight_profile": config.ACTIVE_WEIGHT_PROFILE,
         "domain_weights": active_weights(),
-        "weight_profiles": profile_comparison(scored),
+        "weight_profiles": wp,
+        "data_driven_weights": {
+            "basis": "entropy_ahp", "theta": 0.5,
+            "weights": hybrid, "w_entropy": w_ent,
+            "note": "데이터기반 동적가중 1단계(외부 연구자 KCIS 제안). w=θ·AHP+(1-θ)·Entropy. AHP=산업규모안(전문가 사전), Entropy=DSI 횡단 구분력. IPCA·MoE(2단계)는 60주 패널 축적 후.",
+        },
+        "risk": risk,
+        "risk_note": "위험도 R(외부 연구자 KCIS 제안 1단계 반영): 현재 쏠림(ENM 기반 concentration)만 실산출. 값↑=특정국 의존↑=위험↑. 조작(주간 조회수 급등·봇)·부정감성(댓글 감성)은 주간 패널·감성분석 연동 후 추가.",
         "formula": "DSI_i=Σ(wL·L_norm); KWCI=Σ(w_i·DSI_i); KWCI_index=KWCI/KWCI_2018×100",
         "global": gsum,
         "domains": dom.to_dict(orient="records"),
         "countries": country.to_dict(orient="records"),
         "top": country.head(5).to_dict(orient="records"),
-        "audience_diversification": audience_diversification(scored),
+        "audience_diversification": aud,
         "audience_diversification_note": "분야별 국가 구성비의 유효시장수 ENM=1/HHI(값↑=쏠림↓). 1차 기준=KOFICE 해외한류실태조사 국가별 관심(연 1회·안정, 단면 노이즈 없음). youtube_*는 참고용 보조(현재 단면, YouTube API 한계로 노이즈 큼). basis 필드로 출처 표시.",
     }
     if extras:
