@@ -74,8 +74,8 @@
         </div>
         <div class="layer-grid">
           <div><b>L1</b><span>경제지표</span></div>
-          <div><b>L2</b><span>플랫폼 데이터</span></div>
-          <div><b>L3</b><span>정성 아카이브</span></div>
+          <div><b>L2</b><span>영향력·차트</span></div>
+          <div><b>L3</b><span>수용자 반응</span></div>
         </div>
       </div>
     </section>
@@ -132,7 +132,7 @@
           <span>Step 2</span>
           <h3>DSI 산출</h3>
           <code>DSI = .5L1 + .3L2 + .2L3</code>
-          <p>경제지표·플랫폼 데이터·정성 아카이브를 도메인별 서브 인덱스로 합산합니다.</p>
+          <p>경제지표(L1)·영향력(L2, 차트·순위)·수용자 반응(L3, 시청·검색·발화)을 도메인별 서브 인덱스로 합산합니다.</p>
         </article>
         <article>
           <span>Step 3</span>
@@ -158,8 +158,8 @@
       </div>
       <div class="pipeline-track">
         <div><b>L1 경제지표</b><span>수출액, 매출, 관광수입, 시장 규모</span></div>
-        <div><b>L2 플랫폼 데이터</b><span>국가별 YouTube, Google Trends, KF API, OTT·차트 지표</span></div>
-        <div><b>L3 정성 아카이브</b><span>언론, 비평, 전시·수상, 연구팀 큐레이션 기록</span></div>
+        <div><b>L2 영향력(차트·순위)</b><span>Billboard·Spotify·Netflix Top10·수상·선정 등 제도가 매긴 위상</span></div>
+        <div><b>L3 수용자 반응</b><span>YouTube 조회·Google Trends 검색·SNS 언급·KOFICE 설문 등 개인 수용 행동</span></div>
         <div><b>출력</b><span>국가 × 분기 × 도메인 패널과 KWCI 보고서</span></div>
       </div>
       <div class="source-grid"></div>
@@ -169,7 +169,7 @@
       <div class="section-head">
         <div>
           <p class="eyebrow">Realtime Module</p>
-          <h2>국가별 실시간 보정 모듈</h2>
+          <h2>국가별 실시간 수용자(L3) 보정 모듈</h2>
         </div>
       </div>
       <div class="module-layout">
@@ -182,7 +182,7 @@
           </p>
           <code>GSI(c,d) = .40·S_norm + .35·Y_norm + .25·T_norm</code>
           <code>Module(c) = Σ(w_d · GSI(c,d)) + .05·KF_norm(c)</code>
-          <p class="muted-line">S=KOFICE 설문, Y=YouTube, T=Google Trends, KF=팬덤 인프라. L3 하위가중 0.40/0.35/0.25이며, 도메인 가중 w_d는 본지수와 동일한 8도메인 프로파일(현재 문화중심)을 사용합니다.</p>
+          <p class="muted-line">S=KOFICE 설문, Y=YouTube, T=Google Trends, KF=팬덤 인프라. 세 신호 모두 수용자(L3) 층이며 L3 하위가중 0.40/0.35/0.25, 도메인 가중 w_d는 본지수와 동일한 8도메인 프로파일(현재 문화중심)을 사용합니다. 제도적 위상(차트·순위·수상)은 별도의 영향력(L2) 층입니다.</p>
         </article>
         <article class="module-card">
           <h3>대상 국가 (15)</h3>
@@ -312,6 +312,7 @@
     const ORDER = ['kpop','kvideo','kgame','kwebtoon','kfood','kbeauty','kfashion','ktourism'];
 
     const guide = [
+      {t:"레이어 정의 (핵심)", d:"L1 경제=수출·매출. L2 영향력=차트·순위·수상(제도가 매긴 위상). L3 수용자=개인의 시청·검색·발화(YouTube·Google Trends·SNS·설문). 즉 YouTube·Google Trends는 L3."},
       {t:"정규화 두 체제", d:"시계열은 2018=100(성장 추세), 국가 패널은 0~100 단면(상대 비교). 두 값을 직접 비교하지 마세요."},
       {t:"DSI · KWCI", d:"DSI=0.5·L1+0.3·L2+0.2·L3(결측층 재정규화). KWCI=8도메인 가중합. 막대는 분야별 2018=100 지수."},
       {t:"시장 다변화 (ENM)", d:"ENM=1/HHI. 값↑=여러 시장에 고르게 퍼짐(복원력↑). 관광=방한 국적 구성, 수용=KOFICE 국가별 관심."},
