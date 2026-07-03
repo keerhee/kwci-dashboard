@@ -1,0 +1,9 @@
+﻿genre,dsi_mean,genre_name,domain_weight
+kbeauty,44.61,K뷰티,0.1
+kfashion,44.51,K패션,0.08
+kfood,42.9,K푸드,0.1
+kpop,37.85,K팝,0.2
+kwebtoon,37.82,K웹툰,0.1
+kvideo,36.09,K영상,0.18
+kgame,35.75,K게임,0.16
+ktourism,28.3,K관광,0.08
