@@ -75,15 +75,33 @@ def collect_youtube_metrics(sample: bool = False) -> pd.DataFrame:
 
     rows = []
     videos_endpoint = "https://www.googleapis.com/youtube/v3/videos"
+    # 인기차트(mostPopular)를 pageToken으로 최대 YOUTUBE_CHART_PAGES 페이지까지 수집(50×4=200).
+    # videos.list는 호출당 1유닛뿐이라 국가당 최대 4호출(총 ~60유닛)로 쿼터 부담 없음.
+    max_pages = int(getattr(config, "YOUTUBE_CHART_PAGES", 4))
     for country in config.TARGET_COUNTRIES:
-        params = {
-            "part": "snippet,statistics",
-            "chart": "mostPopular",
-            "regionCode": country,
-            "maxResults": 50,
-        }
-        response = _yt_get(videos_endpoint, params)
-        if response.status_code >= 400:
+        items: list[dict] = []
+        page_token = None
+        err_status = None
+        for _page in range(max_pages):
+            params = {
+                "part": "snippet,statistics",
+                "chart": "mostPopular",
+                "regionCode": country,
+                "maxResults": 50,
+            }
+            if page_token:
+                params["pageToken"] = page_token
+            response = _yt_get(videos_endpoint, params)
+            if response.status_code >= 400:
+                err_status = response.status_code
+                break
+            payload = response.json()
+            items.extend(payload.get("items", []))
+            page_token = payload.get("nextPageToken")
+            time.sleep(0.12)
+            if not page_token:
+                break
+        if not items and err_status is not None:
             for genre in config.GENRE_WEIGHTS:
                 rows.append(
                     {
@@ -91,14 +109,11 @@ def collect_youtube_metrics(sample: bool = False) -> pd.DataFrame:
                         "genre": genre,
                         "youtube_views": 0,
                         "youtube_matched_videos": 0,
-                        "youtube_error": f"http_{response.status_code}",
+                        "youtube_error": f"http_{err_status}",
                         "source": "youtube_api_error",
                     }
                 )
-            time.sleep(0.12)
             continue
-        payload = response.json()
-        items = payload.get("items", [])
         for genre in config.GENRE_WEIGHTS:
             total_views = 0
             matched = 0
@@ -130,7 +145,6 @@ def collect_youtube_metrics(sample: bool = False) -> pd.DataFrame:
                     "source": source,
                 }
             )
-        time.sleep(0.12)
     return pd.DataFrame(rows)
 
 
