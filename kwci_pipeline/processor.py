@@ -11,6 +11,44 @@ import pandas as pd
 from . import config
 
 
+# ── L2 영향력 실측 차트 (KF현황 → 차트 승격, 1단계 K-pop; Apple Music 국가별 Top50 K-Pop 점유율) ──
+import time as _time
+import urllib.request as _urlreq
+_APPLE_SF = {"US": "us", "CN": "cn", "JP": "jp", "VN": "vn", "TH": "th", "ID": "id",
+             "IN": "in", "MY": "my", "FR": "fr", "GB": "gb", "BR": "br", "AR": "ar",
+             "AE": "ae", "TR": "tr", "ZA": "za"}
+_KPOP_GENRE = "51"
+_APPLE_RSS = "https://rss.marketingtools.apple.com/api/v2/{sf}/music/most-played/50/songs.json"
+
+
+def _apple_kpop_share(sf):
+    try:
+        req = _urlreq.Request(_APPLE_RSS.format(sf=sf), headers={"User-Agent": "kwci-charts/1.0"})
+        with _urlreq.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except Exception:
+        return None
+    res = (data.get("feed") or {}).get("results") or []
+    if not res:
+        return None
+    kp = [s for s in res if any(g.get("genreId") == _KPOP_GENRE for g in (s.get("genres") or []))]
+    return round(100.0 * len(kp) / len(res), 1)
+
+
+def collect_kpop_chart_l2(countries=None, pause=0.3):
+    """{ISO: K-Pop 차트 점유율%} — K-pop 도메인 국가별 L2 영향력(Apple Music Top50, 장르51). 실패국 생략."""
+    out = {}
+    for iso in (countries or list(_APPLE_SF)):
+        sf = _APPLE_SF.get(iso)
+        if not sf:
+            continue
+        v = _apple_kpop_share(sf)
+        if v is not None:
+            out[iso] = v
+        _time.sleep(pause)
+    return out
+
+
 def minmax(series: pd.Series) -> pd.Series:
     mn, mx = series.min(), series.max()
     if pd.isna(mn) or pd.isna(mx) or mx == mn:
@@ -128,10 +166,10 @@ def _profile_stats(scored: pd.DataFrame, w: dict) -> dict:
             "top3": list(ranked.head(3).index)}
 
 
-def score_panel(panel):
+def score_panel(panel, chart_l2=None):
     """프레임워크 L1/L2/L3 → DSI → KWCI 산출.
 
-    현재 신호 매핑: L2=KF 한류인프라, L3=KOFICE 설문·YouTube·Google Trends.
+    현재 신호 매핑: L2=실측차트(K-pop=Apple K-Pop 점유율)+KF현황(그외), L3=KOFICE 설문·YouTube·Google Trends.
     L1(경제)은 국가별 수집분만 반영(관세청·KTO) → 도메인 층위가중을 재정규화(프레임워크 결측규칙).
     """
     s = panel.copy()
@@ -144,6 +182,12 @@ def score_panel(panel):
     kf = s[["country", "kf_count"]].drop_duplicates().copy()
     kf["L2_norm"] = minmax(kf["kf_count"])
     s = s.merge(kf[["country", "L2_norm"]], on="country", how="left")
+
+    # L2 승격(1단계): K-pop은 KF현황 대신 실측 차트(Apple K-Pop 점유율), 그외 도메인=KF현황. 차트 결측국은 KF 폴백.
+    if chart_l2:
+        c_norm = minmax(pd.Series(chart_l2, dtype=float))
+        m = s["genre"] == "kpop"
+        s.loc[m, "L2_norm"] = s.loc[m, "country"].map(c_norm).fillna(s.loc[m, "L2_norm"])
 
     # L3 결합 (Google 차단/제한국 → trends 가중을 youtube로 이전)
     a = config.L3_SUBWEIGHTS["survey"]; b = config.L3_SUBWEIGHTS["youtube"]; g = config.L3_SUBWEIGHTS["trends"]
