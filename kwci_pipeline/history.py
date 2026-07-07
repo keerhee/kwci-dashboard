@@ -4,13 +4,13 @@
 도메인별 데이터 출처를 sources에 표기(real vs sample)해 정직하게 구분한다.
 
 실 백필:
-  - KOSIS 콘텐츠산업 수출(orgId=113): 연간 2018~최신 → 분기 선형보간. 음악·방송·영화·게임·만화.
-    (한 번 호출로 다년치 수신. KOSIS_API_KEY 필요.)
+  - 콘텐츠 4분야(음악·방송/영화·게임·만화)는 확정된 연간 공식통계 기반 검증 고정값(2018=100)을
+    결정론적으로 사용한다. 연간 수출은 확정되면 바뀌지 않으므로 실행마다 재호출하지 않는다.
+    (KOSIS 콘텐츠산업조사 '수출' 라이브 합산은 방송·만화 항목이 알려진 실적과 크게 어긋나 표시
+     시계열에는 채택하지 않는다. 진단용 _kosis_annual()은 유지하되 표시 계열은 고정값 사용.)
   - KOSIS 국적·지역별 외국인 입국자(orgId=111, DT_091_111_2009_S005A): 연간 2018~2024 →
     ktourism 볼륨(2018=100) + source-market 다각화. (KOSIS_API_KEY 필요. 2025는 공표연간.)
-샘플 폴백:
-  - 관세청(kfood·kfashion·kbeauty)은 월별×HS×국가 호출량이 커서 기본 샘플 추세. 실 백필은
-    별도(HISTORY_BACKFILL_CUSTOMS) — 운영계정·대량호출 시 확장.
+  - 관세청(kfood·kfashion·kbeauty): 무역통계 연간 수출(가공식품·의류·화장품 HS) 라이브.
 """
 from __future__ import annotations
 
@@ -137,7 +137,7 @@ def _sample_domain_raw(genre: str, year: int, q: int) -> float:
     return max(base * seasonal * noise, 0.001)
 
 
-# ── 실 백필: KOSIS 연간 (한 번 호출로 다년치) ──────────────────
+# ── 진단용: KOSIS 연간 (한 번 호출로 다년치) — 표시 계열엔 미사용 ──
 def _kosis_annual():
     if not config.KOSIS_API_KEY:
         return None
@@ -295,24 +295,16 @@ def build_history(sample: bool = False):
     qs = [q for q in quarters(base) if q <= (2025, 4)]  # 연간비교는 최신 완성연도(2025)까지로 캡
     genres = list(config.GENRE_WEIGHTS)
 
-    # 콘텐츠 4분야(K-pop·K영상·게임·웹툰)는 KOSIS 콘텐츠산업조사 연간 수출(2018~)을
-    # 라이브로 받아 2018=100 지수화한다(API 자동화). 나머지 4분야(푸드·패션·뷰티·관광)는
-    # 장기 백필이 API로 깔끔하지 않아 검증 통계 고정값(REAL_ANNUAL_INDEX)을 사용한다.
-    # KOSIS 키 없거나 응답 결측이면 해당 분야도 검증고정값으로 폴백(결정론적).
-    KOSIS_GENRES = {"kpop", "kvideo", "kgame", "kwebtoon"}
-    kosis = None if sample else _kosis_annual()  # {genre: {year: 전국 수출액}}
+    # 콘텐츠 4분야(K-pop·K영상·게임·웹툰)의 2018=100 역사 시계열은 검증된 연간 공식통계
+    # (REAL_ANNUAL_INDEX)로 결정론적으로 고정한다. 연간 수출 통계는 확정되면 바뀌지 않으므로
+    # 실행마다 재호출하지 않는다. KOSIS 콘텐츠산업조사 '수출' 라이브 합산은 방송·만화 항목이
+    # 알려진 실적과 크게 어긋나(K영상 라이브 ≈1.0배 vs 검증 ≈2.6배, K웹툰 ≈6.5배 vs 검증 4.9배)
+    # 표시 시계열의 안정성·신뢰성을 위해 채택하지 않는다.
+    # (아래 관세청·KOSIS-inbound 라이브가 푸드·패션·뷰티·관광을 덮어쓴다.)
     idx, sources = {}, {}
     for g in genres:
-        ann = kosis.get(g) if (kosis and g in KOSIS_GENRES) else None
-        yrs = sorted(y for y in (ann or {}) if y >= config.HISTORY_BASE_YEAR)
-        if ann and len(yrs) >= 2 and ann.get(config.HISTORY_BASE_YEAR):
-            base_v = ann[config.HISTORY_BASE_YEAR]
-            aidx = {y: ann[y] / base_v * 100 for y in ann if ann[y] is not None}
-            idx[g] = {qq: _idx_q_from_annual(aidx, qq[0], qq[1]) for qq in qs}
-            sources[g] = "kosis(real)"
-        else:
-            idx[g] = {qq: _real_idx_q(g, qq[0], qq[1]) for qq in qs}
-            sources[g] = "stat(verified-fixed)"
+        idx[g] = {qq: _real_idx_q(g, qq[0], qq[1]) for qq in qs}
+        sources[g] = "stat(verified-annual)"
 
     # 관광: KOSIS 국적별 외래객 총계(orgId=111, 2018–2024)를 라이브로 받아 2018=100 지수화.
     # 2025는 표에 없어 공표 연간(REAL_ANNUAL_INDEX 2025=122)으로 보강. 실패 시 전부 검증고정 폴백.
@@ -382,13 +374,13 @@ def build_history(sample: bool = False):
         "weight_profile": config.ACTIVE_WEIGHT_PROFILE,
         "sources": sources,
         "real_domains": real_n,
-        "note": f"2018=100 분기지수(2018–2025 캡). 공공 통계 기반: 콘텐츠 4분야(K-pop·K영상·게임·웹툰)=KOSIS 콘텐츠산업조사 수출 {sum(1 for s in sources.values() if s == 'kosis(real)')}/4 라이브, 푸드·패션·뷰티=관세청 무역통계(가공식품·의류·화장품 HS) 라이브, 관광=KOSIS 국적별 외래객(orgId=111, 2018–2024)+2025 공표. 라이브 결측은 검증 통계로 폴백. 분기 선형보간, 최신연도 이후 유지.",
+        "note": "2018=100 분기지수(2018–2025 캡). 콘텐츠 4분야(K-pop·K영상·게임·웹툰)=검증 연간 공식통계 고정값(확정 통계라 실행 간 불변), 푸드·패션·뷰티=관세청 무역통계(가공식품·의류·화장품 HS) 라이브, 관광=KOSIS 국적별 외래객(orgId=111, 2018–2024)+2025 공표. 라이브 결측은 검증 통계로 폴백. 분기 선형보간, 최신연도 이후 유지.",
         "notes": {
             "kwebtoon": "K웹툰 L1은 KOSIS '만화 수출' 기준. 콘텐츠산업조사의 만화산업은 출판만화+온라인만화(웹툰)를 포함하며, 2020년부터 웹툰이 매출의 과반·수출을 주도(종이 만화 아님). 2018년 수출 베이스가 작아 증가 배수가 크게 보이는 저(低)베이스 효과 유의. 웹툰 '산업 매출'(2024년 2.29조원, 4.9배)은 내수 포함이라 별도 지표로 해석.",
             "kfood": "K푸드 L1은 관세청 가공식품(라면·김치·소스·조미김 등) 수출 기준. 농식품 총수출(곡물·축산 등 포함)이 아니라 한류 식품 신호에 맞춘 가공식품 위주이므로 총수출보다 증가율이 높을 수 있음.",
             "ktourism": "K관광 L1은 KOSIS 국적·지역별 외국인 입국자(orgId=111, DT_091_111_2009_S005A) 총계. 2018 1,563만→2024 1,697만명(2018=100→약 109), 2025는 공표 연간(약 1,870만, 122)으로 보강. 2020–21 코로나 급감·이후 회복.",
             "tourism_diversification": "방한 외래객의 source-market 다각화 지수(2018=100). KOSIS 국적별 입국자(orgId=111) 전 국적 구성으로 유효시장수 ENM=1/HHI를 산출해 지수화. 값이 높을수록 특정국(특히 중국) 의존이 낮아 시장구성이 다변화·복원력↑. 코로나기(2020–22) 중국 급감으로 분산 최고, 2024 중국(27%) 재집중으로 하락. 관광 '볼륨'과 분리한 '질' 지표.",
-            "vintage": "연간비교 2025년까지 캡(2026 부분연도 제외). 콘텐츠(KOSIS)는 최신 확정연도 이후 동일값 유지.",
+            "vintage": "연간비교 2025년까지 캡(2026 부분연도 제외). 콘텐츠(검증 고정값)·관광은 최신 확정연도 이후 동일값 유지.",
         },
         "quarters": [label(q) for q in disp],
         "composite": [composite[q] for q in disp],
