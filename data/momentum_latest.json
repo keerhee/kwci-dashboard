@@ -1,111 +1,111 @@
 {
-  "period": "2026-07",
+  "period": "2026-08",
   "type": "monthly momentum subindex (nowcast)",
   "layers": "L1 관세청 월수출 + L3 YouTube·Google Trends (연단위·인프라 제외)",
   "weight_profile": "two_axis_cultural",
-  "global_momentum": 30.91,
+  "global_momentum": 33.23,
   "countries": [
     {
       "country": "MY",
-      "momentum": 51.25,
+      "momentum": 48.57,
       "country_name": "말레이시아"
     },
     {
-      "country": "AE",
-      "momentum": 49.26,
-      "country_name": "UAE"
-    },
-    {
-      "country": "US",
-      "momentum": 40.85,
-      "country_name": "미국"
-    },
-    {
-      "country": "ZA",
-      "momentum": 35.42,
-      "country_name": "남아공"
-    },
-    {
       "country": "IN",
-      "momentum": 34.78,
+      "momentum": 47.89,
       "country_name": "인도"
     },
     {
-      "country": "GB",
-      "momentum": 32.82,
-      "country_name": "영국"
-    },
-    {
       "country": "VN",
-      "momentum": 32.69,
+      "momentum": 46.62,
       "country_name": "베트남"
     },
     {
-      "country": "ID",
-      "momentum": 26.89,
-      "country_name": "인도네시아"
+      "country": "US",
+      "momentum": 41.91,
+      "country_name": "미국"
+    },
+    {
+      "country": "GB",
+      "momentum": 39.77,
+      "country_name": "영국"
     },
     {
       "country": "JP",
-      "momentum": 26.13,
+      "momentum": 37.69,
       "country_name": "일본"
     },
     {
+      "country": "ID",
+      "momentum": 35.8,
+      "country_name": "인도네시아"
+    },
+    {
+      "country": "AE",
+      "momentum": 33.62,
+      "country_name": "UAE"
+    },
+    {
       "country": "TH",
-      "momentum": 25.81,
+      "momentum": 31.56,
       "country_name": "태국"
     },
     {
+      "country": "ZA",
+      "momentum": 31.23,
+      "country_name": "남아공"
+    },
+    {
+      "country": "BR",
+      "momentum": 28.94,
+      "country_name": "브라질"
+    },
+    {
       "country": "FR",
-      "momentum": 23.69,
+      "momentum": 22.69,
       "country_name": "프랑스"
     },
     {
       "country": "AR",
-      "momentum": 23.34,
+      "momentum": 22.13,
       "country_name": "아르헨티나"
     },
     {
-      "country": "BR",
-      "momentum": 22.82,
-      "country_name": "브라질"
-    },
-    {
       "country": "TR",
-      "momentum": 21.94,
+      "momentum": 16.93,
       "country_name": "터키"
     },
     {
       "country": "CN",
-      "momentum": 15.91,
+      "momentum": 13.11,
       "country_name": "중국"
     }
   ],
   "top": [
     {
       "country": "MY",
-      "momentum": 51.25,
+      "momentum": 48.57,
       "country_name": "말레이시아"
     },
     {
-      "country": "AE",
-      "momentum": 49.26,
-      "country_name": "UAE"
+      "country": "IN",
+      "momentum": 47.89,
+      "country_name": "인도"
+    },
+    {
+      "country": "VN",
+      "momentum": 46.62,
+      "country_name": "베트남"
     },
     {
       "country": "US",
-      "momentum": 40.85,
+      "momentum": 41.91,
       "country_name": "미국"
     },
     {
-      "country": "ZA",
-      "momentum": 35.42,
-      "country_name": "남아공"
-    },
-    {
-      "country": "IN",
-      "momentum": 34.78,
-      "country_name": "인도"
+      "country": "GB",
+      "momentum": 39.77,
+      "country_name": "영국"
     }
   ]
 }
