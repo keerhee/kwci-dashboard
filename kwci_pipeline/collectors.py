@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import base64
+import csv
+import io
+import html
+import unicodedata
 import json
 import os
 import re
@@ -549,6 +553,168 @@ def collect_customs_export(sample: bool = False) -> pd.DataFrame:
             f"관세청 수집 전량 실패 (기준월 {yymm}). 지수 산출을 중단한다. "
             f"사유 예: {df['customs_error'].iloc[0]}")
     return df
+
+
+
+# ══════════════════════════════════════════════════════════════════
+# 도메인 전용 L2 신호 (키 불필요)
+#
+# 기존 L2 는 KF 한류현황 건수 하나였고, 그것은 **국가 단위**라 한 나라 안에서
+# 8개 도메인에 같은 값이 들어갔다. 도메인 전용 신호가 있는 곳과 없는 곳의
+# L1-L2 상관이 예외 없이 갈린다.
+#
+#   앱 매출순위(K웹툰) +0.43 · Netflix(K영상) +0.38 · Spotify(K팝) +0.31
+#   KF 건수뿐(K푸드·뷰티·패션·관광)  -0.07 ~ +0.14
+#
+# 아래 둘은 공개 자료라 API 키가 필요 없다.
+# ══════════════════════════════════════════════════════════════════
+
+_WD_URL = "https://query.wikidata.org/sparql"
+_CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "cache"
+
+
+def _wd_query(query: str, key: str) -> list:
+    """Wikidata SPARQL. 결과를 디스크에 캐시한다(느리고 자주 안 바뀐다)."""
+    cache = _CACHE_DIR / f"wikidata_{key}.json"
+    try:
+        return json.loads(cache.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        pass
+    r = requests.post(_WD_URL, data={"query": query},
+                      headers={"Accept": "application/sparql-results+json",
+                               "User-Agent": _COMTRADE_UA}, timeout=180)
+    r.raise_for_status()
+    rows = r.json()["results"]["bindings"]
+    out = [{k: v["value"] for k, v in b.items()} for b in rows]
+    try:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _norm_title(t: str) -> str:
+    t = unicodedata.normalize("NFKC", t or "").lower()
+    for ch in "\uff1a:!?\u2019'\"\u201c\u201d\u2018,.\u00b7-\u2013\u2014()[]":
+        t = t.replace(ch, " ")
+    return " ".join(t.split())
+
+
+def collect_netflix_l2() -> dict[str, float]:
+    """Netflix Top10 공개 TSV → K영상 L2 (국가별 한국 작품 차트 점유).
+
+    키가 필요 없고 271주 x 94개국 이력이 있다. L2 에서 유일하게 시계열이 되는
+    신호다(앱 순위는 소급이 안 된다).
+
+    한국 작품 식별은 Wikidata 로 한다. 동명이 흔해서 그대로 쓰면
+    한국 영화 '친구'(Friends) 때문에 미국 시트콤 Friends 가 983건,
+    The Empress 가 596건 잡힌다. 그래서 동명 비한국 작품이 있는 제목은 빼되,
+    Netflix ID(P1874)를 가진 한국 작품이면 살린다.
+    """
+    tsv_url = "https://www.netflix.com/tudum/top10/data/all-weeks-countries.tsv"
+    r = requests.get(tsv_url, headers={"User-Agent": _COMTRADE_UA}, timeout=180)
+    r.raise_for_status()
+    rows = list(csv.DictReader(io.StringIO(r.text), delimiter="\t"))
+    if not rows:
+        raise RuntimeError("Netflix Top10 TSV 가 비어 있다.")
+
+    kr = {x["label"] for x in _wd_query(
+        """SELECT DISTINCT ?label WHERE {
+             ?item wdt:P31/wdt:P279* ?type .
+             VALUES ?type { wd:Q11424 wd:Q5398426 wd:Q1259759 wd:Q581714 }
+             ?item wdt:P495 wd:Q884 ; rdfs:label ?label .
+             FILTER(LANG(?label) = "en") }""", "kr_titles_en")}
+    nfx = {x["label"] for x in _wd_query(
+        """SELECT DISTINCT ?label WHERE {
+             ?item wdt:P495 wd:Q884 ; wdt:P1874 ?nfid ; rdfs:label ?label .
+             FILTER(LANG(?label) = "en") }""", "kr_titles_netflix")}
+    chart = {x["show_title"] for x in rows}
+    cands = sorted(kr & chart)
+    bad = set()
+    for i in range(0, len(cands), 150):
+        vals = " ".join('"%s"@en' % t.replace("\\", "").replace('"', '\\"')
+                        for t in cands[i:i+150])
+        try:
+            bad |= {x["label"] for x in _wd_query(
+                f"""SELECT DISTINCT ?label WHERE {{ VALUES ?label {{ {vals} }}
+                    ?item rdfs:label ?label ; wdt:P495 ?c ;
+                          wdt:P31/wdt:P279* ?type .
+                    VALUES ?type {{ wd:Q11424 wd:Q5398426 wd:Q1259759 wd:Q581714 }}
+                    FILTER(?c != wd:Q884) }}""", f"collisions_{i}")}
+        except Exception:  # noqa: BLE001
+            pass
+    keep = {_norm_title(t) for t in (set(cands) - bad) | (set(cands) & nfx)}
+
+    # 최신 완전월을 쓴다(마지막 주는 부분월일 수 있다)
+    weeks = sorted({x["week"] for x in rows})
+    ref = weeks[-1][:7]
+    if len({w for w in weeks if w[:7] == ref}) < 4:
+        ref = sorted({w[:7] for w in weeks})[-2]
+    score: dict[str, float] = {}
+    for x in rows:
+        if x["week"][:7] != ref or _norm_title(x["show_title"]) not in keep:
+            continue
+        cc = x["country_iso2"]
+        if cc in config.TARGET_COUNTRIES:
+            score[cc] = score.get(cc, 0.0) + (11 - int(x["weekly_rank"]))
+    print(f"[netflix] 기준월 {ref} · 한국 작품 {len(keep)}편 · 관측 {len(score)}개국")
+    return score
+
+
+def collect_spotify_l2() -> dict[str, float]:
+    """Spotify 국가별 일간 차트 → K팝 L2 (한국 음악 스트리밍 점유율 %).
+
+    공식 경로는 막혀 있다. charts.spotify.com 은 HTTP 200 을 주지만 12KB 짜리
+    로그인 껍데기이고, Web API 에는 차트 엔드포인트가 없다. kworb.net 이
+    공개 미러링하며 우리 국가 대부분을 준다(중국은 Spotify 미진출).
+    **제3자 미러라는 점은 한계로 공표해야 한다.**
+
+    아티스트 식별은 이름이 아니라 **Spotify 아티스트 ID** 로 한다. 이름으로
+    하면 터키 가수 manifest, 푸에르토리코 Plan B 가 동명 한국 아티스트로 잡혀
+    터키 점유율이 12.6% 로 부풀었다. ID 대조로 0.30% 가 되었다.
+    """
+    kr_ids = {x["sid"] for x in _wd_query(
+        """SELECT DISTINCT ?sid WHERE {
+             ?item wdt:P1902 ?sid .
+             { { ?item wdt:P495 wd:Q884 } UNION { ?item wdt:P17 wd:Q884 }
+               UNION { ?item wdt:P27 wd:Q884 } }
+             UNION
+             { ?item wdt:P136 wd:Q213665 ; wdt:P463 ?grp .
+               { ?grp wdt:P495 wd:Q884 } UNION { ?grp wdt:P17 wd:Q884 } } }""",
+        "kpop_spotify_ids")}
+    row_re = re.compile(r"<tr>(.*?)</tr>", re.S)
+    art_re = re.compile(r"\.\./artist/([A-Za-z0-9]+)\.html")
+    ua = ("Mozilla/5.0 (compatible; KWCI-pipeline/1.0)")
+    out: dict[str, float] = {}
+    for cc in config.TARGET_COUNTRIES:
+        try:
+            r = requests.get(f"https://kworb.net/spotify/country/{cc.lower()}_daily.html",
+                             headers={"User-Agent": ua}, timeout=40)
+        except Exception:  # noqa: BLE001
+            continue
+        if r.status_code != 200 or len(r.text) < 10000:
+            continue
+        tot = kr = 0.0
+        for tr in row_re.findall(r.text):
+            cells = re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)
+            if len(cells) < 7:
+                continue
+            plain = [html.unescape(re.sub(r"<[^>]+>", "", c)).strip() for c in cells]
+            if not plain[0].isdigit():
+                continue
+            streams = plain[6].replace(",", "")
+            if not streams.isdigit():
+                continue
+            tot += int(streams)
+            aids = art_re.findall(cells[2])
+            if aids and aids[0] in kr_ids:      # 주 아티스트만 인정(피처링 제외)
+                kr += int(streams)
+        if tot > 0:
+            out[cc] = round(kr / tot * 100, 3)
+        time.sleep(0.4)
+    print(f"[spotify] 한국 아티스트 ID {len(kr_ids)}개 · 관측 {len(out)}개국 (출처: kworb 미러)")
+    return out
 
 
 def _comtrade_fetch(period: str, cmd: str):

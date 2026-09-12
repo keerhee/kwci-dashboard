@@ -238,10 +238,19 @@ def score_panel(panel, chart_l2=None):
     s = s.merge(kf[["country", "L2_norm"]], on="country", how="left")
 
     # L2 승격(1단계): K-pop은 KF현황 대신 실측 차트(Apple K-Pop 점유율), 그외 도메인=KF현황. 차트 결측국은 KF 폴백.
+    # L2 승격: 도메인 전용 실측 차트가 있으면 KF 현황 대신 그것을 쓴다.
+    # chart_l2 는 {genre: {country: value}} 다. 하위호환을 위해
+    # {country: value} 평면 dict 이면 kpop 으로 해석한다.
     if chart_l2:
-        c_norm = minmax(pd.Series(chart_l2, dtype=float))
-        m = s["genre"] == "kpop"
-        s.loc[m, "L2_norm"] = s.loc[m, "country"].map(c_norm).fillna(s.loc[m, "L2_norm"])
+        charts = chart_l2 if all(isinstance(v, dict) for v in chart_l2.values()) \
+            else {"kpop": chart_l2}
+        for genre, series in charts.items():
+            if not series:
+                continue
+            c_norm = minmax(pd.Series(series, dtype=float))
+            m = s["genre"] == genre
+            # 차트 결측국은 KF 현황으로 폴백
+            s.loc[m, "L2_norm"] = s.loc[m, "country"].map(c_norm).fillna(s.loc[m, "L2_norm"])
 
     # L3 결합 (Google 차단/제한국 → trends 가중을 youtube로 이전)
     a = config.L3_SUBWEIGHTS["survey"]; b = config.L3_SUBWEIGHTS["youtube"]; g = config.L3_SUBWEIGHTS["trends"]

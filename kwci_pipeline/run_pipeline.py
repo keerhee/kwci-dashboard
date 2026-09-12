@@ -44,11 +44,29 @@ def run(sample: bool = False) -> int:
 
     # L2 영향력 실측 차트: K-pop 국가별 Apple 차트 점유율(장르51). sample 모드/실패 시 빈 dict → KF현황 폴백.
     try:
-        chart_l2 = {} if sample else processor.collect_kpop_chart_l2()
+        chart_l2 = {}
+        if not sample:
+            # 도메인 전용 L2. 셋 다 API 키가 필요 없다.
+            kpop_apple = processor.collect_kpop_chart_l2()
+            try:
+                kpop_spotify = collectors.collect_spotify_l2()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[kwci] Spotify L2 생략: {exc}")
+                kpop_spotify = {}
+            try:
+                kvideo_netflix = collectors.collect_netflix_l2()
+            except Exception as exc:  # noqa: BLE001
+                print(f"[kwci] Netflix L2 생략: {exc}")
+                kvideo_netflix = {}
+            # K팝은 Apple 점유율을 우선하고 없는 나라만 Spotify 로 메운다
+            kpop = dict(kpop_spotify); kpop.update(kpop_apple)
+            chart_l2 = {k: v for k, v in
+                        {"kpop": kpop, "kvideo": kvideo_netflix}.items() if v}
     except Exception:
         chart_l2 = {}
     if chart_l2:
-        print(f"[kwci] L2 chart (K-pop, Apple): {chart_l2}")
+        print("[kwci] L2 chart: " + ", ".join(
+            f"{g}={len(v)}개국" for g, v in chart_l2.items()))
 
     raw_paths = {
         "survey": collectors.save_raw(survey, "survey_baseline"),
