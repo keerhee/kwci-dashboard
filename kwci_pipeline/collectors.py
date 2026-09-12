@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,8 @@ import pandas as pd
 import requests
 
 from . import config
+
+_COMTRADE_UA = "KWCI-pipeline/1.0 (UN Comtrade public preview)"
 
 
 def ensure_dirs() -> None:
@@ -69,11 +72,44 @@ def _yt_get(url: str, params: dict):
     return last
 
 
+# ── YouTube 쿼터 예산 ──────────────────────────────────────────
+# Data API v3 는 하루 10,000 units 다. videos.list 는 1 unit 이지만
+# search.list 는 **100 units** 라, 15개국 × 8도메인 조합마다 검색으로 빠지면
+# 12,000 units 가 되어 한도를 넘는다. 실제로 2026-06-28 수집분은 84건,
+# 07-02 는 69건이 search_http_429 로 떨어졌다(120행 중 유효 28·43행).
+#
+# 그래서 둘을 더한다.
+#   (1) search 호출에 **예산 상한**. 넘으면 결측으로 남기고 다음 실행에서 받는다
+#   (2) search 결과를 디스크에 캐시. 인기 영상 구성은 하루 단위로 크게 안 변한다
+YT_SEARCH_BUDGET = int(os.getenv("YOUTUBE_SEARCH_BUDGET", "60"))   # 60 × 100 = 6,000 units
+YT_CACHE_DAYS = int(os.getenv("YOUTUBE_CACHE_DAYS", "7"))
+_YT_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / "cache" / "youtube_search.json"
+_yt_state = {"search_calls": 0, "skipped": 0}
+
+
+def _yt_cache_load() -> dict:
+    try:
+        return json.loads(_YT_CACHE_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _yt_cache_save(cache: dict) -> None:
+    try:
+        _YT_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _YT_CACHE_PATH.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def collect_youtube_metrics(sample: bool = False) -> pd.DataFrame:
     if sample or not config.YOUTUBE_API_KEY:
         return _sample_youtube_metrics()
 
     rows = []
+    cache = _yt_cache_load()
+    _yt_today = datetime.now(timezone(timedelta(hours=9))).strftime("%Y-%m-%d")
+    _yt_state.update(search_calls=0, skipped=0)
     videos_endpoint = "https://www.googleapis.com/youtube/v3/videos"
     # 인기차트(mostPopular)를 pageToken으로 최대 YOUTUBE_CHART_PAGES 페이지까지 수집(50×4=200).
     # videos.list는 호출당 1유닛뿐이라 국가당 최대 4호출(총 ~60유닛)로 쿼터 부담 없음.
@@ -128,13 +164,34 @@ def collect_youtube_metrics(sample: bool = False) -> pd.DataFrame:
             source = "youtube_api"
             error = ""
             if matched == 0 and config.YOUTUBE_SEARCH_FALLBACK:
-                fallback = _collect_youtube_search_metric(country, genre)
-                if fallback["youtube_matched_videos"] > 0:
-                    total_views = fallback["youtube_views"]
-                    matched = fallback["youtube_matched_videos"]
-                    source = "youtube_search_fallback"
-                elif fallback["youtube_error"]:
-                    error = fallback["youtube_error"]
+                key = f"{country}|{genre}"
+                hit = cache.get(key)
+                fresh = hit and (
+                    datetime.strptime(_yt_today, "%Y-%m-%d")
+                    - datetime.strptime(hit.get("date", "1970-01-01"), "%Y-%m-%d")
+                ).days < YT_CACHE_DAYS
+                if fresh:
+                    total_views = hit["views"]
+                    matched = hit["matched"]
+                    source = "youtube_search_cache"
+                elif _yt_state["search_calls"] < YT_SEARCH_BUDGET:
+                    _yt_state["search_calls"] += 1
+                    fallback = _collect_youtube_search_metric(country, genre)
+                    if fallback["youtube_matched_videos"] > 0:
+                        total_views = fallback["youtube_views"]
+                        matched = fallback["youtube_matched_videos"]
+                        source = "youtube_search_fallback"
+                        cache[key] = {"date": _yt_today, "views": total_views,
+                                      "matched": matched}
+                    elif fallback["youtube_error"]:
+                        error = fallback["youtube_error"]
+                        total_views = float("nan")
+                else:
+                    # 예산 소진. 0 으로 채우지 않고 결측으로 남긴다.
+                    _yt_state["skipped"] += 1
+                    error = "search_budget_exhausted"
+                    total_views = float("nan")
+                    source = "youtube_budget_skip"
             rows.append(
                 {
                     "country": country,
@@ -145,6 +202,10 @@ def collect_youtube_metrics(sample: bool = False) -> pd.DataFrame:
                     "source": source,
                 }
             )
+    _yt_cache_save(cache)
+    print(f"[youtube] search 호출 {_yt_state['search_calls']}/{YT_SEARCH_BUDGET} "
+          f"(≈{_yt_state['search_calls'] * 100} units), "
+          f"예산 소진으로 건너뜀 {_yt_state['skipped']}건")
     return pd.DataFrame(rows)
 
 
@@ -412,9 +473,21 @@ def _sample_trends() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def _parse_customs_expdlr(xml_text: str) -> float:
-    """관세청 응답(XML)에서 expDlr(수출금액 USD) 합산."""
-    return sum(float(x) for x in re.findall(r"<expDlr>([0-9.]+)</expDlr>", xml_text) if x)
+def _parse_customs_expdlr(xml_text: str):
+    """관세청 응답(XML)에서 expDlr(수출금액 USD) 합산.
+
+    반환: (합계, 항목수, 결과코드)
+
+    **왜 항목수를 같이 돌려주는가.** 이전 구현은 <expDlr> 태그가 하나도 없으면
+    조용히 0.0 을 돌려주었다. 그래서 "아직 공표되지 않은 달"과 "수출이 실제로 0"
+    이 구분되지 않았고, 2026-07-02 수집분 45행이 전부 0 이 되었는데도 오류
+    플래그가 붙지 않았다. 그 0 이 정규화를 거쳐 전 국가 50.0 이 되었다.
+    """
+    items = re.findall(r"<expDlr>([0-9.]+)</expDlr>", xml_text)
+    code = re.search(r"<resultCode>([^<]*)</resultCode>", xml_text)
+    msg = re.search(r"<(?:returnAuthMsg|errMsg|resultMsg)>([^<]*)<", xml_text)
+    rc = (code.group(1).strip() if code else "") or (msg.group(1).strip() if msg else "")
+    return sum(float(x) for x in items if x), len(items), rc
 
 
 def collect_customs_export(sample: bool = False) -> pd.DataFrame:
@@ -427,12 +500,16 @@ def collect_customs_export(sample: bool = False) -> pd.DataFrame:
         return _sample_customs_export()
 
     now = datetime.now(timezone(timedelta(hours=9)))
-    last_month = now.replace(day=1) - timedelta(days=1)
-    yymm = last_month.strftime("%Y%m")
+    # **기준월을 2개월 전으로 잡는다.** 관세청 무역통계는 익월 중순에 확정
+    # 공표되므로, 직전월을 요청하면 월초 실행에서 빈 응답이 온다. 실제로
+    # 06-28 실행(→2026-05)은 19억 달러가 들어왔고 07-02 실행(→2026-06)은 0 이었다.
+    first = now.replace(day=1)
+    ref = (first - timedelta(days=1)).replace(day=1) - timedelta(days=1)
+    yymm = ref.strftime("%Y%m")
     rows = []
     for genre, hs_list in config.CUSTOMS_HS_CODES.items():
         for country in config.TARGET_COUNTRIES:
-            total, err = 0.0, ""
+            total, err, nitem = 0.0, "", 0
             for hs in hs_list:
                 try:
                     r = requests.get(config.CUSTOMS_EXPORT_URL, params={
@@ -446,14 +523,107 @@ def collect_customs_export(sample: bool = False) -> pd.DataFrame:
                 if r.status_code >= 400:
                     err = f"http_{r.status_code}"
                     continue
-                total += _parse_customs_expdlr(r.text)
+                sub, cnt, rc = _parse_customs_expdlr(r.text)
+                total += sub
+                nitem += cnt
+                if cnt == 0 and rc and rc not in {"00", "0", "NORMAL SERVICE."}:
+                    err = f"api:{rc[:40]}"
                 time.sleep(0.08)
-            rows.append({"country": country, "genre": genre, "export_usd": total,
-                         "customs_error": err,
-                         "source": "customs_api" if not err else "customs_api_partial"})
+            # 항목이 하나도 없으면 "수출 0" 이 아니라 **결측**이다.
+            # 0 을 내보내면 정규화가 그것을 실측으로 취급한다.
+            if nitem == 0:
+                rows.append({"country": country, "genre": genre,
+                             "export_usd": float("nan"),
+                             "customs_error": err or f"no_items({yymm})",
+                             "source": "customs_api_empty"})
+            else:
+                rows.append({"country": country, "genre": genre, "export_usd": total,
+                             "customs_error": err,
+                             "source": "customs_api" if not err else "customs_api_partial"})
     if not rows:
         return _sample_customs_export()
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+    # 전량 결측이면 조용히 넘어가지 않는다. 이 상태로 지수를 만들면 안 된다.
+    if df["export_usd"].notna().sum() == 0:
+        raise RuntimeError(
+            f"관세청 수집 전량 실패 (기준월 {yymm}). 지수 산출을 중단한다. "
+            f"사유 예: {df['customs_error'].iloc[0]}")
+    return df
+
+
+def _comtrade_fetch(period: str, cmd: str):
+    """Comtrade 한 달치. 실패는 None, 빈 응답은 []."""
+    params = {"reporterCode": "410", "period": period, "flowCode": "X",
+              "cmdCode": cmd, "partner2Code": "0", "customsCode": "C00", "motCode": "0"}
+    for attempt in range(5):
+        try:
+            r = requests.get(config.COMTRADE_URL, params=params,
+                             headers={"User-Agent": _COMTRADE_UA}, timeout=60)
+        except Exception:  # noqa: BLE001
+            time.sleep(4 * (attempt + 1)); continue
+        if r.status_code == 200:
+            return r.json().get("data") or []
+        if r.status_code in (429, 500, 502, 503):
+            time.sleep(6 * (attempt + 1)); continue
+        return None
+    return None
+
+
+def collect_comtrade_export(sample: bool = False) -> pd.DataFrame:
+    """UN Comtrade → 도메인별·국가별 L1 수출액 (키 불필요).
+
+    관세청 API 를 대체하는 1차 경로다. 공표 시차가 2~9개월이라 고정 오프셋을
+    쓰면 빈 응답이 온다 — 2026-07-02 수집 사고가 정확히 그것이었다.
+    여기서는 최신 월부터 뒤로 훑어 자료가 있는 달을 찾고, 그 달을 기록한다.
+    """
+    if sample:
+        return _sample_customs_export()
+    now = datetime.now(timezone(timedelta(hours=9)))
+    rows, used = [], {}
+
+    # 기준월은 한 번만 찾는다. 도메인마다 훑으면 요청이 4배가 되고,
+    # 공표 시차는 품목과 무관하게 같다. 레코드가 많은 화장품으로 탐색한다.
+    probe_cmd = config.COMTRADE_HS["kbeauty"]
+    ref_period, cursor = None, now.replace(day=1)
+    for _ in range(config.COMTRADE_LOOKBACK):
+        cursor = (cursor - timedelta(days=1)).replace(day=1)
+        period = cursor.strftime("%Y%m")
+        if _comtrade_fetch(period, probe_cmd):
+            ref_period = period
+            break
+        time.sleep(1.3)
+    if ref_period is None:
+        raise RuntimeError(
+            f"Comtrade 최신 공표월을 {config.COMTRADE_LOOKBACK}개월 안에서 찾지 못했다.")
+    print(f"[comtrade] 최신 공표월 = {ref_period}")
+
+    for genre, cmd in config.COMTRADE_HS.items():
+        data = _comtrade_fetch(ref_period, cmd)
+        time.sleep(1.3)
+        if not data:
+            for cc in config.TARGET_COUNTRIES:
+                rows.append({"country": cc, "genre": genre, "export_usd": float("nan"),
+                             "customs_error": f"comtrade_no_data({ref_period})",
+                             "source": "comtrade_empty"})
+            continue
+        used[genre] = ref_period
+        agg: dict[str, float] = {}
+        for item in data:
+            cc = config.COMTRADE_M49.get(item.get("partnerCode"))
+            val = item.get("primaryValue")
+            if cc and cc in config.TARGET_COUNTRIES and val:
+                agg[cc] = agg.get(cc, 0.0) + float(val)
+        for cc in config.TARGET_COUNTRIES:
+            rows.append({"country": cc, "genre": genre,
+                         "export_usd": agg.get(cc, float("nan")),
+                         "customs_error": "" if cc in agg else f"not_in_comtrade({ref_period})",
+                         "source": "comtrade"})
+    df = pd.DataFrame(rows)
+    if df["export_usd"].notna().sum() == 0:
+        raise RuntimeError("Comtrade 수집 전량 실패. 지수 산출을 중단한다.")
+    print(f"[comtrade] 기준월 {used} · 유효 관측 "
+          f"{int(df['export_usd'].notna().sum())}/{len(df)}")
+    return df
 
 
 def _sample_customs_export() -> pd.DataFrame:
@@ -551,8 +721,10 @@ def collect_kto_visitors(sample: bool = False, ym: str | None = None) -> pd.Data
     if sample or not config.DATA_GO_KR_API_KEY:
         return _sample_kto_visitors()
     if ym is None:
-        lm = datetime.now(timezone(timedelta(hours=9))).replace(day=1) - timedelta(days=1)
-        ym = lm.strftime("%Y%m")
+        # 관세청과 같은 이유로 2개월 전을 쓴다. 출입국통계도 익월 공표다.
+        _now = datetime.now(timezone(timedelta(hours=9)))
+        _first = _now.replace(day=1)
+        ym = ((_first - timedelta(days=1)).replace(day=1) - timedelta(days=1)).strftime("%Y%m")
     try:
         r = requests.get(config.KTO_VISITORS_URL, params={
             "ServiceKey": config.DATA_GO_KR_API_KEY, "YM": ym, "ED_CD": "E",
@@ -560,19 +732,36 @@ def collect_kto_visitors(sample: bool = False, ym: str | None = None) -> pd.Data
         text = r.text
     except Exception:  # noqa: BLE001
         return _sample_kto_visitors()
-    rows = []
+    rows, unmatched, n_items = [], [], 0
     for m in re.finditer(r"<item>(.*?)</item>", text, re.S):
         blob = m.group(1)
         nm = re.search(r"<natKorNm>(.*?)</natKorNm>", blob)
         num = re.search(r"<num>(\d+)</num>", blob)
         if not nm or not num:
             continue
-        code = config.KTO_NAME_MAP.get(nm.group(1).replace(" ", "").strip())
+        n_items += 1
+        raw = nm.group(1).replace(" ", "").strip()
+        code = config.KTO_NAME_MAP.get(raw)
         if not code:
+            unmatched.append(raw)
             continue
         rows.append({"country": code, "genre": "ktourism", "export_usd": float(num.group(1)),
                      "customs_error": "", "source": "kto_api"})
-    return pd.DataFrame(rows) if rows else _sample_kto_visitors()
+    # **합성 샘플로 조용히 대체하지 않는다.** 이전 구현은 한 건도 매칭되지 않으면
+    # sample_kto 를 돌려주었고, 그 합성값이 K관광 L1(가중 0.5)에 그대로 들어갔다.
+    if not rows:
+        raise RuntimeError(
+            f"KTO 수집 실패 (기준월 {ym}, 응답 항목 {n_items}건). "
+            f"매칭 안 된 국가명 예: {unmatched[:8]}. "
+            "KTO_NAME_MAP 을 응답의 natKorNm 표기에 맞춰야 한다.")
+    missing = sorted(set(config.TARGET_COUNTRIES) - {r["country"] for r in rows})
+    for c in missing:
+        rows.append({"country": c, "genre": "ktourism", "export_usd": float("nan"),
+                     "customs_error": f"not_in_kto_response({ym})",
+                     "source": "kto_api_missing"})
+    if unmatched:
+        print(f"[kto] 매칭 안 된 국가명 {len(set(unmatched))}종: {sorted(set(unmatched))[:12]}")
+    return pd.DataFrame(rows)
 
 
 def _sample_kto_visitors() -> pd.DataFrame:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -50,9 +51,18 @@ def collect_kpop_chart_l2(countries=None, pause=0.3):
 
 
 def minmax(series: pd.Series) -> pd.Series:
-    mn, mx = series.min(), series.max()
-    if pd.isna(mn) or pd.isna(mx) or mx == mn:
-        return pd.Series([50.0] * len(series), index=series.index)
+    """국가 간 Min-Max 정규화.
+
+    **상수이면 50.0 이 아니라 결측을 돌려준다.** 이전 구현은 모든 값이 같을 때
+    50.0 을 주었다. 2026-07-02 수집에서 관세청이 전량 0 이 된 날 15개국이 모두
+    50.0 을 받아 K푸드·K패션·K뷰티의 L1 이 정보 없는 상수가 되었고, 그 결과
+    1위가 미국에서 베트남으로 바뀌고 글로벌 지수가 32.5 → 40.0 으로 올랐다.
+    정보가 없으면 점수도 없어야 한다. 결측이면 DSI 가 남은 층위로 재정규화한다.
+    """
+    valid = series.dropna()
+    mn, mx = (valid.min(), valid.max()) if len(valid) else (float("nan"), float("nan"))
+    if pd.isna(mn) or pd.isna(mx) or mx == mn or len(valid) < 2:
+        return pd.Series([float("nan")] * len(series), index=series.index)
     return (series - mn) / (mx - mn) * 100
 
 
@@ -64,8 +74,11 @@ def build_panel(survey, youtube, trends, kf, export=None):
     panel = survey.merge(youtube, on=["country", "genre"], how="left")
     panel = panel.merge(trends, on=["country", "genre"], how="left")
     panel = panel.merge(kf, on="country", how="left")
-    panel["youtube_views"] = panel["youtube_views"].fillna(0)
-    panel["trends_interest"] = panel["trends_interest"].fillna(0)
+    # **결측을 0 으로 채우지 않는다.** YouTube 0 은 "관심 없음"이 아니라 대개
+    # 매칭 실패나 쿼터 소진이고, Trends 0 은 절단이다. 0 으로 채우면 정규화가
+    # 그것을 실측 최저값으로 취급해 척도의 min 을 측정 인공물이 잡는다.
+    panel["youtube_views"] = panel["youtube_views"].replace(0, float("nan"))
+    panel["trends_interest"] = panel["trends_interest"].replace(0, float("nan"))
     panel["kf_count"] = panel["kf_count"].fillna(panel["kf_score"])
     # L1 경제: 관세청 수출액 (해당 분야만; 나머지 분야는 NaN → L1 결측)
     if export is not None and len(export):
@@ -166,6 +179,47 @@ def _profile_stats(scored: pd.DataFrame, w: dict) -> dict:
             "top3": list(ranked.head(3).index)}
 
 
+L1_MAX_ACHIEVABLE = 0.56
+L1_COVERAGE_MIN = float(os.getenv("KWCI_L1_COVERAGE_MIN", "0.46"))
+
+
+def validate_coverage(scored) -> dict:
+    """경제층(L1) 커버리지를 확인하고, 기준 미달이면 산출을 막는다.
+
+    **왜 필요한가.** 결측을 결측으로 표시하는 것만으로는 부족하다. DSI 는 없는
+    층위를 빼고 재정규화하므로, L1 이 통째로 비어도 지수는 계속 나온다 —
+    다만 그 점수는 "절반이 경제"가 아니라 100% 관심 신호로 만든 다른 자다.
+    2026-07-02 자료에서 K푸드·K패션·K뷰티(가중 합 0.28)의 L1 이 전량 결측인데도
+    지수가 산출되고 1위가 바뀌었다. 같은 눈금이 아닌 값을 공표하지 않으려면
+    여기서 멈춰야 한다.
+
+    국가별 L1 이 존재할 수 있는 도메인은 다섯뿐이다.
+      HS 무역통계 → kpop .20 · kfood .10 · kfashion .08 · kbeauty .10
+      KTO(입국자) → ktourism .08
+    남은 셋(kvideo .18 · kgame .16 · kwebtoon .10, 합 0.44)은 서비스 수출이라
+    HS 코드 자체가 없다. 달성 가능한 상한은 0.56 이고,
+    "DSI 의 절반이 경제"는 8개 도메인 중 5개에서만 성립한다.
+    """
+    w = config.GENRE_WEIGHTS
+    covered, detail = 0.0, {}
+    for genre, gw in w.items():
+        sub = scored[scored["genre"] == genre]
+        # 합성 샘플은 커버리지로 치지 않는다.
+        if "customs_source" in sub:
+            sub = sub[~sub["customs_source"].astype(str).str.startswith("sample")]
+        ok = sub["L1_norm"].notna().sum() if "L1_norm" in sub else 0
+        detail[genre] = int(ok)
+        if ok >= 2:                     # 최소 2개국이라야 국가 간 비교가 성립
+            covered += gw
+    ratio = covered / sum(w.values())
+    return {"l1_weight_covered": round(ratio, 4), "per_genre_countries": detail,
+            "threshold": L1_COVERAGE_MIN, "max_achievable": L1_MAX_ACHIEVABLE,
+            "pass": ratio >= L1_COVERAGE_MIN,
+            "note": "국가별 L1 은 HS 무역통계(K팝·푸드·패션·뷰티)와 KTO(관광) "
+                    "다섯 도메인에만 존재한다. K영상·K게임·K웹툰은 서비스 수출이라 "
+                    "HS 코드가 없어 국가별 공식 통계가 존재하지 않는다."}
+
+
 def score_panel(panel, chart_l2=None):
     """프레임워크 L1/L2/L3 → DSI → KWCI 산출.
 
@@ -195,7 +249,12 @@ def score_panel(panel, chart_l2=None):
     rmask = s["country"].isin(config.TRENDS_RESTRICTED)
     s.loc[rmask, "wb"] = b + g
     s.loc[rmask, "wg"] = 0.0
-    s["L3_norm"] = s["wa"] * s["survey_norm"] + s["wb"] * s["youtube_norm"] + s["wg"] * s["trends_norm"]
+    # 결측 신호는 빼고 남은 신호로 가중을 재정규화한다.
+    # (이전에는 결측이 0 으로 들어가 L3 를 통째로 끌어내렸다)
+    _parts = [("wa", "survey_norm"), ("wb", "youtube_norm"), ("wg", "trends_norm")]
+    _num = sum(s[w].where(s[c].notna(), 0.0) * s[c].fillna(0.0) for w, c in _parts)
+    _den = sum(s[w].where(s[c].notna(), 0.0) for w, c in _parts)
+    s["L3_norm"] = (_num / _den.replace(0, float("nan")))
 
     # L1 (경제): 관세청 수출액 → 분야별 Min-Max. 수출 데이터 없는 분야는 NaN(결측).
     if "export_usd" in s.columns:
@@ -230,6 +289,15 @@ def score_panel(panel, chart_l2=None):
     country["kwci"] = country["kwci"].clip(upper=100).round(2)
     country["country_name"] = country["country"].map(lambda c: config.TARGET_COUNTRIES[c]["name_ko"])
     country = country.sort_values("kwci", ascending=False)
+    cov = validate_coverage(s)
+    if not cov["pass"]:
+        raise RuntimeError(
+            f"경제층(L1) 커버리지 {cov['l1_weight_covered']:.0%} < 기준 {L1_COVERAGE_MIN:.0%}. "
+            f"도메인별 국가 수: {cov['per_genre_countries']}. "
+            f"(달성 가능 상한 {L1_MAX_ACHIEVABLE:.0%}) "
+            "L1 이 빠진 채 산출된 지수는 같은 눈금이 아니므로 공표하지 않는다. "
+            "수집을 먼저 고치라. (기준 조정은 KWCI_L1_COVERAGE_MIN 환경변수)")
+    country.attrs["coverage"] = cov
     return s, country
 
 
